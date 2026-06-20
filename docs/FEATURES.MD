@@ -39,8 +39,9 @@ The system should support:
 
 The system should support:
 
-- Order creation — a random active restaurant and a random active customer are
-  selected, and their details are snapshotted onto the order
+- Order creation — a random active restaurant is selected; a random active customer
+  within the restaurant's H3 service area (k=5 ring, ~8–10 km) is selected; both
+  are snapshotted onto the order. Invalid cross-city pairings are rejected.
 - Restaurant location storage (snapshot on the order)
 - Customer location storage (snapshot on the order)
 - Order status tracking — `PENDING` / `ASSIGNED` / `PICKED_UP` / `DELIVERED` / `CANCELLED`
@@ -56,8 +57,14 @@ The system should support:
 
 The system should support:
 
-- Weighted scoring allocation across distance, rating, and load, each normalized to 0–1
-- Eligibility filtering — only `ONLINE` and `IDLE` riders are considered
+- **H3 hexagonal geo-filtering** — only `ONLINE` riders within a k=2 ring (~4–5 km) of
+  the restaurant's H3 hexagon (resolution 7) are candidates; uses `h3-js`
+- **Expanded candidate pool** — includes riders in `ACCEPTED` and `PICKED_UP` status,
+  not just `IDLE`; a rider finishing a nearby delivery is a valid candidate
+- **ETAR-based scoring** — Estimated Time to Arrive at Restaurant (`time_to_free +
+  travel_time`) replaces raw distance; normalized alongside Rating and Load (0–1 each)
+- Weighted scoring allocation across ETAR, rating, and load, with configurable weights
+  (defaults: ETAR 0.50, Rating 0.30, Load 0.20)
 - Deterministic rider selection (reproducible and debuggable)
 - A FIFO pending-order queue that holds orders when no rider is free (graceful backpressure)
 - Automatic assignment of queued orders as riders become available

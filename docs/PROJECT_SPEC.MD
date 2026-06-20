@@ -35,10 +35,14 @@ a backend loop, which stands in for the absence of real rider phones.
 When an order is created (either automatically by the cron job or manually by an
 admin):
 
-1. A restaurant is selected at random from the active restaurants, and a customer
-   drop-off point is generated at random within the Ranchi coordinate bounding box.
-2. The allocation engine evaluates every eligible rider and assigns the highest
-   scoring one.
+1. A restaurant is selected at random from the active restaurants. A customer is
+   selected at random from within the restaurant's **H3 service area** (a k=5 ring
+   at resolution 7, covering ~8–10 km). This prevents unrealistic cross-city pairings
+   — just as Swiggy/Zomato only show you restaurants within delivery range.
+2. The allocation engine **geo-filters** candidates to `ONLINE` riders inside the
+   restaurant's k=2 H3 ring (~4–5 km), then ranks them by **ETAR** (Estimated Time
+   to Arrive at Restaurant) combined with rating and load. Busy riders finishing a
+   nearby delivery are eligible — the one who will reach the restaurant soonest wins.
 3. The chosen rider transitions to a busy state, a route is drawn from the rider
    to the restaurant, and the rider marker begins moving along it.
 
@@ -105,23 +109,26 @@ clear seam to swap in a Redis-based queue (e.g. BullMQ) for higher scale.
 
 These decisions reflect deliberate engineering tradeoffs rather than defaults.
 
-**Weighted scoring with normalization.** Different factors use different units —
-distance is in kilometers, rating is on a 1–5 scale. They cannot simply be added
-together. Each factor is first **normalized to a 0–1 range** (closest rider scores
-1.0 on distance, a 5-star rider scores 1.0 on rating, etc.), then combined using
-configurable weights.
+**H3 hexagonal geo-indexing.** The engine uses Uber's open-source `h3-js` library —
+the same system Swiggy and Zomato use — to divide the city into hexagonal cells at
+resolution 7 (~5 km² each). When an order arrives, the candidate pool is restricted
+to `ONLINE` riders whose current H3 hex falls within a k=2 ring of the restaurant's
+hex (~4–5 km radius). Hexagons tessellate perfectly with no gaps or overlaps, giving
+unambiguous zone membership with O(1) lookup.
 
-**Availability as a filter, not a weight.** Since only available, idle riders are
-ever scored, an "availability" weight would be constant across all candidates and
-contribute nothing to the ranking. Availability is therefore enforced as a hard
-filter before scoring, and that weight is redistributed to factors that actually
-discriminate.
+**ETAR replaces raw distance.** Distance was a proxy for "who gets there soonest."
+ETAR (Estimated Time to Arrive at Restaurant = `time_to_free + travel_time`) is a
+direct measure of it. A rider finishing a nearby delivery can have a lower ETAR than
+an idle rider far away — and should win. The candidate pool therefore includes riders
+in `ACCEPTED` and `PICKED_UP` status, not just `IDLE`.
 
-**Load redefined as recent workload.** With one order per rider at a time, "current
-active orders" is always zero for any candidate — so it too would be dead weight.
-Load is instead defined as **deliveries completed in a recent rolling window**,
-turning it into a fatigue/fairness signal that spreads work across riders rather
-than overloading a few.
+**Weighted scoring with normalization.** ETAR, rating, and load are in different units
+and cannot be added directly. Each is normalized to 0–1 first, then combined with
+configurable weights (defaults: ETAR 0.50, Rating 0.30, Load 0.20).
+
+**Load redefined as recent workload.** Load counts deliveries completed in a rolling
+60-minute window, turning it into a fatigue/fairness signal that spreads work across
+riders rather than overloading a few.
 
 **Snapshot pattern for orders.** When an order is created, the restaurant's name
 and coordinates are **copied onto the order itself** rather than only referenced.
@@ -136,32 +143,40 @@ predictability and debuggability.
 
 ## 4. Scoring Model
 
-The engine combines several normalized factors into a single score. The factor
-**weights are not hardcoded** — they are runtime-configurable by the admin, so the
-allocation strategy can be tuned live without redeploying. The values below are the
-**default** weights the system ships with.
+The engine runs a two-phase pipeline: **H3 geo-filter** then **weighted ETAR scoring**.
 
-| Factor   | Default weight | Score definition (normalized 0–1)                          |
-|----------|----------------|------------------------------------------------------------|
-| Distance | 0.45           | Closer to the restaurant scores higher (Haversine, km)     |
-| Rating   | 0.30           | `rating / 5`                                               |
-| Load     | 0.25           | Fewer recent deliveries scores higher (fairness/fatigue)   |
+### Phase 1 — H3 Geo-filter
 
-`Final Score = (w_distance · Distance) + (w_rating · Rating) + (w_load · Load)`,
-where the weights `w_*` are supplied at allocation time. The rider with the highest
-final score is selected.
+```
+restaurantHex = h3.latLngToCell(restaurant.lat, restaurant.lng, 7)
+candidateZone = h3.gridDisk(restaurantHex, 2)          // k=2 ring, ~4–5 km
+```
 
-**Configurable weights.** The admin can adjust the weights from the dashboard
-(e.g. via sliders) or through the API. This makes the speed-vs-quality tradeoff
-tangible: weighting Distance heavily favors the nearest rider, while weighting
-Rating heavily favors higher-performing riders regardless of proximity. The system
-**normalizes the supplied weights so they sum to 1** before scoring, so any
-combination remains valid. Weights are read from a live configuration store at
-allocation time rather than baked into the code, and the defaults above are used
-when none are set.
+Only `ONLINE` riders whose H3 hex is in `candidateZone` are candidates.
+Riders in `IDLE`, `ACCEPTED`, and `PICKED_UP` status are all included.
 
-Distance uses the **Haversine** (great-circle) formula — a straight-line
-approximation; production dispatch would use road distance and live traffic.
+### Phase 2 — Weighted Scoring
+
+Three factors are computed per candidate, normalized to 0–1, and combined.
+**Weights are not hardcoded** — runtime-configurable by the admin.
+
+| Factor | Default weight | Score definition (normalized 0–1) |
+|--------|---------------|-----------------------------------|
+| ETAR | 0.50 | `1 − (ETAR / maxETAR)` — lower ETAR = higher score |
+| Rating | 0.30 | `rating / 5` |
+| Load | 0.20 | `1 − (recentLoad / maxLoad)` — fewer recent deliveries scores higher |
+
+**ETAR** (Estimated Time to Arrive at Restaurant):
+- IDLE riders: `ETAR = travel_time_to_restaurant`
+- PICKED_UP riders: `ETAR = (1 − progress) × 120s + travel_time`
+- ACCEPTED riders: `ETAR = (1 − progress) × 240s + travel_time`
+
+`Final Score = (w_etar · ETARScore) + (w_rating · RatingScore) + (w_load · LoadScore)`,
+where the weights are normalized to sum to 1 before scoring.
+
+**Configurable weights.** The admin can adjust from the dashboard or via API.
+Weighting ETAR heavily favors speed of arrival; weighting Rating heavily favors
+top-performing riders. The system normalizes any supplied weights so they stay valid.
 
 ---
 
@@ -169,13 +184,13 @@ approximation; production dispatch would use road distance and live traffic.
 
 The backend logic is organized into focused modules:
 
-| Module                | Responsibility                                                      |
-|-----------------------|--------------------------------------------------------------------|
-| `config.js`           | Bounding box, scoring weights, tick/cron timing                    |
-| `models.js`           | Mongoose schemas: Rider, Restaurant, Order, AllocationHistory      |
-| `allocationEngine.js` | Haversine distance, normalized weighted scoring, reason generation |
-| `orderGenerator.js`   | Random order creation (single + bulk) and the auto-order cron      |
-| `simulation.js`       | Tick loop: queue processing, movement, state machine, WS broadcast |
+| Module                | Responsibility                                                                  |
+|-----------------------|---------------------------------------------------------------------------------|
+| `config.js`           | Bounding box, H3 params, ETAR params, scoring weights, tick/cron timing         |
+| `models.js`           | Mongoose schemas: Rider, Restaurant, Customer, Order, AllocationHistory         |
+| `allocationEngine.js` | H3 geo-filter, ETAR computation, normalized weighted scoring, reason generation |
+| `orderGenerator.js`   | Random order creation with H3 service area validation, single + bulk + auto-cron|
+| `simulation.js`       | Tick loop: queue processing, movement, state machine, WS broadcast              |
 
 **Data model (high level):**
 - **Rider** — name, location, rating, `availabilityStatus`, movement `status`, active-order count, current order.
@@ -186,7 +201,7 @@ The backend logic is organized into focused modules:
 **Request / event flow:**
 1. Rider seeded/registered and marked online.
 2. Order created (cron or admin).
-3. Engine filters to eligible riders and scores them.
+3. Engine H3 geo-filters candidates and scores them by ETAR, rating, and load.
 4. Best rider assigned (or order queued if none free).
 5. Assignment persisted and written to allocation history.
 6. Movement loop animates the rider and streams updates over WebSockets.
@@ -207,6 +222,7 @@ The backend logic is organized into focused modules:
 - **Node.js** + **Express.js** — REST API and server runtime
 - **Socket.IO** — WebSocket transport for streaming live map state
 - **node-cron** (or `setInterval`) — scheduled order generation and the movement tick
+- **h3-js** — Uber's H3 hexagonal geospatial indexing library for geo-filtering
 
 ### Database
 - **MongoDB** with **Mongoose** — riders, restaurants, orders, and allocation history
@@ -225,8 +241,10 @@ The backend logic is organized into focused modules:
 
 ## 7. Scope & Honest Framing
 
-The system is best described as **a deterministic allocation engine with a live
-simulation harness and an AI explainability layer** — not as a real-time GPS
-dispatch product. Distances are straight-line approximations and rider movement is
-simulated. These boundaries are intentional for a focused, demonstrable build, and
-the natural extensions are listed below.
+The system is best described as **a deterministic allocation engine with H3
+hexagonal geo-indexing, ETAR-based predictive assignment, a live simulation
+harness, and an AI explainability layer** — not as a real-time GPS dispatch
+product. Travel times are Haversine approximations and rider movement is simulated.
+These boundaries are intentional for a focused, demonstrable build. The architecture
+directly mirrors how Swiggy and Zomato work: H3 zones define who can receive an
+order, and predictive arrival time determines who actually gets it.
