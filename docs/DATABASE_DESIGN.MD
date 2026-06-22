@@ -37,8 +37,11 @@ active customer** from these collections, and snapshots their details onto the o
 | `isSimulated`        | Boolean   | yes      | `true` for dummy riders, `false` for real logged-in partners |
 | `createdAt`          | Date      | yes      | Creation timestamp                                           |
 
-> A rider is eligible for allocation only when `availabilityStatus === 'ONLINE'`
-> **and** `status === 'IDLE'`.
+> A rider enters the geo-candidate pool when `availabilityStatus === 'ONLINE'`,
+> regardless of movement `status` (`IDLE`, `ACCEPTED`, or `PICKED_UP` are all eligible).
+> ETAR accounts for the time a busy rider needs to finish their current delivery before
+> they can reach the new restaurant — a rider nearly done with a nearby drop-off can
+> beat an idle rider who is farther away.
 
 ---
 
@@ -121,7 +124,7 @@ One record per allocation decision — a full audit trail.
 | `riderId`              | ObjectId | yes      | Ref → `riders` (the winner)                           |
 | `allocationScore`      | Number   | yes      | Winning final score                                    |
 | `allocationReason`     | String   | yes      | Explanation text                                       |
-| `breakdown`            | Mixed    | no       | Per-factor sub-scores (distance/rating/load + raw km)  |
+| `breakdown`            | Mixed    | no       | Per-factor sub-scores (ETAR/rating/load + raw ETAR seconds) |
 | `candidatesConsidered` | Number   | no       | How many eligible riders were scored                   |
 | `createdAt`            | Date     | yes      | Decision timestamp                                     |
 
@@ -165,7 +168,7 @@ When an order is created (auto cron or admin action):
 
 | Collection          | Index                                   | Why                                          |
 |---------------------|-----------------------------------------|----------------------------------------------|
-| `riders`            | `{ availabilityStatus: 1, status: 1 }`  | Fast lookup of eligible (ONLINE+IDLE) riders |
+| `riders`            | `{ availabilityStatus: 1, status: 1 }`  | Fast lookup of ONLINE riders for geo-candidate pool |
 | `orders`            | `{ status: 1, createdAt: 1 }`           | FIFO queue scan of `PENDING` orders          |
 | `orders`            | `{ assignedRiderId: 1, deliveredAt: 1 }`| Recent-load aggregation for fairness scoring |
 | `restaurants`       | `{ isActive: 1 }`                        | Random active-restaurant selection           |

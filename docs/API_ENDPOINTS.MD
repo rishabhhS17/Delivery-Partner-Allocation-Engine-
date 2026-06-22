@@ -2,6 +2,9 @@
 
 | Method | Endpoint                  | Purpose                                   |
 |--------|---------------------------|-------------------------------------------|
+| POST   | `/auth/login`             | Log in (admin or delivery partner)        |
+| POST   | `/auth/logout`            | Invalidate session                        |
+| GET    | `/auth/me`                | Get current authenticated user           |
 | POST   | `/riders`                 | Register a rider                          |
 | GET    | `/riders`                 | List riders                               |
 | GET    | `/riders/:id`             | Rider details                             |
@@ -21,5 +24,6 @@
 | GET    | `/allocation-history`     | Allocation audit trail                    |
 | GET    | `/config/weights`         | Get current scoring weights               |
 | PUT    | `/config/weights`         | Update scoring weights (normalized to 1)  |
+| GET    | `/analytics`              | Dashboard stats: avg pickup/delivery time, throughput, per-rider fairness distribution |
 
 Live map updates are pushed over a WebSocket channel rather than polled.

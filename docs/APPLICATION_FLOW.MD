@@ -132,7 +132,7 @@ A single trip through the whole system:
 6. The order goes `ASSIGNED`, the rider goes `ACCEPTED`, a route to the restaurant is built.
 7. An allocation history record is written with the score and reason.
 8. The rider animates to the restaurant → `PICKED_UP` → animates to the customer → `DELIVERED`.
-9. Positions and statuses stream to every client live; the map updates in real time.
+9. Positions and statuses stream to every client live; the Rider Map and Order Map both update in real time.
 10. The rider returns to `IDLE`; the dashboard, history, and analytics update.
 
 ---

@@ -17,7 +17,8 @@ allocated and move across the map to deliver. This is the minimum demonstrable p
 4. **Rider Management (basic)** — list riders with details, availability, rating, location
 5. **Order Management (basic)** — create order, bulk-create, list orders, status, assigned rider
 6. **Dashboard (basic)** — counters: total riders, available riders, active orders, completed orders
-7. **Live Allocation Map** — rider locations, restaurant, customer, the assignment route, allocation happening live
+7. **Rider Map** — fleet overview: all rider positions color-coded by state (IDLE / ACCEPTED / PICKED_UP), restaurant pins, allocation happening live
+8. **Order Map** — order detail: restaurant + customer pins, assigned rider's live position, two-leg delivery route (rider → restaurant → customer)
 
 **Outcome:** a complete, demonstrable allocation loop. Everything below makes this
 better — but this alone is a working product.
@@ -46,8 +47,8 @@ and shows you handle more than the happy path.
   assigned order, recent workload
 - **Order Management** → add pending/queued orders view, allocation reason + score,
   lifecycle timestamps
-- **Live Allocation Map** → add pending/unassigned orders, three rider-state colors,
-  explicit two-leg route (rider → restaurant → customer)
+- **Rider Map** → add pending/unassigned order markers, confirm three rider-state colors
+- **Order Map** → add explicit two-leg route annotation (rider → restaurant → customer), allocation reason on selection
 
 **Outcome:** the system is transparent, observable, and clearly more than CRUD.
 
@@ -57,14 +58,11 @@ and shows you handle more than the happy path.
 
 **Goal:** the standout features. Optional, but each one raises the ceiling.
 
-- **Weight-tuning sliders on the Live Map** — tune ETAR / Rating / Load scoring
-  weights live and watch allocations change *(highest-value enhancement — pull forward if time allows)*
-- **Reassignment on rider failure** — re-queue and reassign if an assigned rider
-  drops mid-delivery, visible on the map *(the single most impressive new logic)*
-- **SLA / stale-order flagging** — highlight delayed orders in red on the map and dashboard
-- **Candidate comparison** — show why the chosen rider beat the runner-up
+- **Weight-tuning sliders on the Rider Map** — tune ETAR / Rating / Load scoring weights live and watch allocations change *(highest-value enhancement — pull forward if time allows)*
+- **Reassignment on rider failure** — re-queue and reassign if an assigned rider drops mid-delivery, visible on the Rider Map *(the single most impressive new logic)*
+- **SLA / stale-order flagging** — highlight delayed orders in red on the Rider Map and dashboard
+- **Candidate comparison** — show why the chosen rider beat the runner-up (in Order Map or Allocation History)
 - **Queue-depth-over-time chart** on the Dashboard
-- **Allocation reason popup** on order selection on the map
 - **Order cancellation**
 - Optional refactor: combine Restaurant + Customer into one "Locations" page with tabs
 
@@ -78,7 +76,7 @@ and shows you handle more than the happy path.
 | Phase | Pages | What you get |
 |-------|-------|--------------|
 | 0 — Foundation | (backend, no pages) | Models, engine, simulation, server, seed |
-| 1 — MVP | Login, Restaurant Mgmt, Customer Mgmt, Rider Mgmt, Order Mgmt, Dashboard, Live Map | A working, demonstrable allocation loop |
+| 1 — MVP | Login, Restaurant Mgmt, Customer Mgmt, Rider Mgmt, Order Mgmt, Dashboard, Rider Map, Order Map | A working, demonstrable allocation loop |
 | 2 — Better | + Allocation History, Partner View (+ extend MVP pages) | Transparency, analytics, more than CRUD |
 | 3 — Enhancements | (mostly additions to existing pages) | Live tuning, fault tolerance, polish |
 

@@ -21,14 +21,26 @@ decisions — never to make them.
 
 ## 2. How the System Works
 
-### 2.1 The live map (primary screen)
+### 2.1 The two live map pages
 
-The main screen is a **Live Allocation Map** of Ranchi showing roughly 20 riders
-as colored markers (idle vs. busy), a set of fixed restaurant pins, and active
-orders. Because a background job continuously generates orders and the simulation
-moves riders, the map is never empty — the system is alive the moment it is
-opened, with no real GPS feed required. The rider movement is fully simulated by
-a backend loop, which stands in for the absence of real rider phones.
+The system has two dedicated map pages, both showing live-updating data streamed
+over WebSockets:
+
+**Rider Map (fleet overview)** — shows all ~20 riders as colored markers (by
+state: idle / heading to restaurant / delivering), the fixed restaurant pins, and
+pending/unassigned orders. This is the primary dispatch view: you can see the
+whole fleet at a glance, watch riders move in real time, and observe allocations
+happening live.
+
+**Order Map (order detail)** — focused on a single order: restaurant pin,
+customer drop-off pin, the assigned rider's live position, and the two-leg route
+(rider → restaurant → customer). Selecting an order opens this view to follow a
+specific delivery end to end.
+
+Because a background job continuously generates orders and the simulation moves
+riders, neither map is ever empty — the system is alive the moment it is opened,
+with no real GPS feed required. Rider movement is fully simulated by a backend
+loop, which stands in for the absence of real rider phones.
 
 ### 2.2 Order creation and allocation
 
