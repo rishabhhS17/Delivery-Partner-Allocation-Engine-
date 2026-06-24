@@ -11,7 +11,15 @@ Before anything runs, the database is populated by a seed script:
 
 1. **Restaurants** — 5–10 fixed pickup points placed at coordinates inside the Ranchi bounding box.
 2. **Customers** — a set of drop-off points, also inside the box (admin-managed thereafter).
-3. **Riders** — ~20 riders with random coordinates in the box, each `ONLINE` and `IDLE`.
+3. **Riders** — 30–35 riders with random coordinates in the box, each `ONLINE` and `IDLE`, with `h3Index` pre-computed from their starting position.
+
+On server start, `simulation.js` loads all riders from MongoDB and builds two
+in-memory structures:
+- `riderState` — `Map<riderId → rider object>` for O(1) rider lookups
+- `h3Buckets` — `Map<h3Cell → Set<riderId>>` for O(1) geo-candidate lookup
+
+These are the authoritative live state for allocation. MongoDB is not queried
+on the tick hot path.
 
 The admin can add or soft-delete restaurants and customers at any time afterward.
 
@@ -55,9 +63,10 @@ In every case the system:
 On each tick, the engine processes the **PENDING queue** in FIFO order. For each pending order:
 
 1. **H3 geo-filter** — compute the restaurant's H3 hexagon (resolution 7) and build a
-   k=2 ring (~4–5 km radius). Keep only `ONLINE` riders whose current position falls
-   inside that ring. This includes riders in `IDLE`, `ACCEPTED`, and `PICKED_UP`
-   status — not just idle ones.
+   k=2 ring (~4–5 km radius, 19 cells). Look up each cell in the in-memory
+   `h3Buckets` map and union the results — O(19 + C). Keep only `ONLINE` riders.
+   This includes riders in `IDLE`, `ACCEPTED`, and `PICKED_UP` status — not just
+   idle ones. No MongoDB query is made during this step.
 2. If **no geo-candidates**, the order stays queued and is retried next tick (backpressure).
 3. If candidates exist, compute **ETAR** (Estimated Time to Arrive at Restaurant) for
    each: `time_to_free + travel_time_to_restaurant`. Idle riders have time_to_free = 0;
@@ -66,14 +75,17 @@ On each tick, the engine processes the **PENDING queue** in FIFO order. For each
    **select** the highest score.
 5. Mark the order **`ASSIGNED`**, set the rider to **`ACCEPTED`**, build a route from
    the rider to the restaurant, and write an **allocation history** record with the
-   score breakdown and AI/template reason.
+   score breakdown and AI/template reason. Flush the rider's updated position,
+   `h3Index`, and status to MongoDB (lifecycle event write).
 
 ---
 
 ## 5. How a delivery plays out (the state machine)
 
-Once assigned, the rider moves along its route. Each tick advances it **5% of the
-current leg** (so a leg completes in 20 ticks):
+Once assigned, the rider moves along its route at a **constant 40 km/h**.
+Leg duration is computed from the actual route distance at assignment time
+and stored on the order (`leg1Duration_s`, `leg2Duration_s`). Progress is
+derived from wall-clock time — not a fixed step per tick:
 
 ```
 IDLE  ──assigned──►  ACCEPTED  ──reaches restaurant──►  PICKED_UP  ──reaches customer──►  delivered
@@ -82,10 +94,13 @@ IDLE  ──assigned──►  ACCEPTED  ──reaches restaurant──►  PICK
   └──────────────────────────── returns to IDLE ◄──────────────────────────────────────────┘
 ```
 
-- **ACCEPTED** → rider animates toward the restaurant. On arrival, the order becomes
-  **`PICKED_UP`**, a new route is drawn to the customer, and progress resets.
+- **ACCEPTED** → rider animates toward the restaurant (positions updated in-memory
+  every tick, no DB writes during movement). On arrival, the order becomes
+  **`PICKED_UP`**, a new route is drawn to the customer, progress resets, and the
+  rider's position + `h3Index` + status are **flushed to MongoDB** (lifecycle event).
 - **PICKED_UP** → rider animates toward the customer. On arrival, the order becomes
-  **`DELIVERED`** (with a `deliveredAt` timestamp).
+  **`DELIVERED`** (with a `deliveredAt` timestamp) and the rider's final position +
+  `h3Index` + status are **flushed to MongoDB**.
 - After a short cooldown the rider returns to **`IDLE`**, becomes available again, and
   can be picked up for the next queued order.
 

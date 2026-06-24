@@ -81,13 +81,16 @@ candidateZone  = h3.gridDisk(restaurantHex, 2)          // 19 hexagons, ~4–5 k
 ```
 
 A rider is in the **geo-candidate pool** if:
-- `h3.latLngToCell(rider.lat, rider.lng, 7)` is contained in `candidateZone`
+- Their pre-computed `h3Index` (stored on the Rider document at resolution 7) is contained in `candidateZone`
 - `availabilityStatus === 'ONLINE'`
 
 > **Key change from v1:** Riders with status `ACCEPTED` or `PICKED_UP` are now
 > included — not just `IDLE`. A rider finishing a nearby delivery is a real
 > candidate. Their availability is handled by ETAR (they have a non-zero
 > time-to-free).
+
+**This lookup is performed against the in-memory H3 bucket map, not a MongoDB
+query.** See §2.1 below for the in-memory index architecture.
 
 ### Order Generation Service Area Constraint
 
@@ -104,8 +107,48 @@ if (!serviceArea.includes(customerHex)) → skip this pair, try another restaura
 
 This prevents Lucknow-to-Allahabad style pairings at the data generation level.
 
-> **H3 cell indices are computed on the fly from existing lat/lng fields.** No
-> schema changes are needed — riders and restaurants already store coordinates.
+### 2.1 In-Memory H3 Bucket Map
+
+Computing each rider's H3 cell on every tick and scanning all riders per order
+produces an O(P × R) operation per tick (P pending orders × R total riders). For a
+small demo fleet this is invisible, but the pattern is wrong. The correct approach:
+
+**The simulation module maintains two in-memory structures:**
+
+```js
+riderState  // Map<riderId → full rider object (includes h3Index)>
+h3Buckets   // Map<h3Cell → Set<riderId>>
+```
+
+**On startup:** load all riders from MongoDB, compute `h3Index` for each from their
+stored coordinates, populate both maps.
+
+**On every tick (position update):** update lat/lng and `h3Index` in `riderState`;
+move the riderId between cells in `h3Buckets`. Cost: O(1) per rider move. **No
+MongoDB write.**
+
+**On lifecycle events only** (state transitions that matter for persistence):
+flush the rider's updated position and `h3Index` to MongoDB. These events are:
+- Rider assigned → `ACCEPTED`
+- Rider reaches restaurant → `PICKED_UP`
+- Rider delivers → back to `IDLE`
+- Rider toggles `ONLINE` / `OFFLINE`
+
+This is 3–4 DB writes per delivery cycle instead of one per tick (~20× reduction).
+
+**The geo-filter hot path becomes:**
+
+```js
+candidateZone = h3.gridDisk(restaurantCell, 2)           // 19 cells
+candidates    = ∪ h3Buckets.get(cell) for each cell      // O(19 + C)
+```
+
+Total cost per order: **O(19 + C)** where C = riders currently in the zone.
+No MongoDB query on the allocation hot path.
+
+**Why not Redis?** An in-process Map is sufficient for a single-server demo.
+The seam to move `h3Buckets` into Redis exists if the system ever scales
+horizontally — the interface is the same.
 
 ---
 
@@ -124,33 +167,46 @@ How long until the rider can leave for the new restaurant.
 
 | Rider Status | time_to_free |
 |---|---|
-| `IDLE` | 0 |
-| `PICKED_UP` (delivering to customer) | `(1 - order.progress) × AVG_LEG_DURATION` |
-| `ACCEPTED` (heading to pick up) | `(1 - order.progress) × AVG_LEG_DURATION × 2` |
+| `IDLE` | `0` |
+| `PICKED_UP` (delivering to customer) | `(1 − progress) × order.leg2Duration_s` |
+| `ACCEPTED` (heading to pick up) | `(1 − progress) × order.leg1Duration_s + order.leg2Duration_s` |
 
-`AVG_LEG_DURATION` is the average time for one leg of a delivery (configurable,
-default 120 seconds based on the simulation tick rate).
+`leg1Duration_s` and `leg2Duration_s` are computed at order assignment time from
+actual route distances and stored on the order:
 
-Why the ×2 multiplier for `ACCEPTED`? A rider who has just picked up the assignment
-still has two legs left — reaching the restaurant and then delivering to the
-customer. Multiplying by 2 is a first-order approximation. A rider at 50% of leg 1
-has approximately one full leg remaining on their current delivery.
+```
+leg1Duration_s = haversine(rider, restaurant) / RIDER_SPEED_KMH × 3600
+leg2Duration_s = haversine(restaurant, customer) / RIDER_SPEED_KMH × 3600
+```
+
+**ACCEPTED formula explained:** an ACCEPTED rider has the remaining fraction of
+leg 1 plus the entire leg 2 still ahead. At 50% progress on leg 1:
+`0.5 × leg1Duration_s + leg2Duration_s`. The previous formula
+`(1 − progress) × AVG_LEG_DURATION × 2` collapsed leg 2 into the progress
+fraction, yielding near-zero estimates for riders deep into leg 1 — a significant
+ETAR underestimate corrected here.
 
 ### travel_time_to_restaurant
 
 ```
-distance_km = haversine(rider.lat, rider.lng, restaurant.lat, restaurant.lng)
-travel_time = distance_km / AVG_SPEED_KM_PER_SEC
+distance_km  = haversine(rider.lat, rider.lng, restaurant.lat, restaurant.lng)
+travel_time_s = distance_km / RIDER_SPEED_KMH × 3600
 ```
 
-`AVG_SPEED_KM_PER_SEC` is configurable (default ~0.005 km/s = 18 km/h, a
-realistic urban two-wheeler speed).
+All riders travel at a constant `RIDER_SPEED_KMH = 40` (configurable). This is
+used for both ETAR calculation and actual movement simulation — keeping scoring
+and movement consistent.
 
 ### Result
 
-Every geo-candidate gets an ETAR in seconds. An idle rider 0.5 km away might
-have ETAR = 100s. A busy rider 100m away who is 90% done with delivery might
-have ETAR = 24 + 20 = 44s — and wins.
+Every geo-candidate gets an ETAR in seconds. At 40 km/h:
+
+- Idle rider **2.0 km** from restaurant: `0 + (2.0/40)×3600 = **180s**`
+- PICKED_UP rider **0.3 km** from restaurant, 85% done with a leg of
+  `leg2Duration_s = 27s`: `(0.15 × 27) + (0.3/40×3600) = 4 + 27 = **31s** — wins`
+
+Rider B wins despite being mid-delivery because their remaining time to the
+restaurant is far shorter than Rider A's travel time from idle.
 
 ---
 
@@ -187,37 +243,42 @@ Final Score = (w_etar   × ETARScore)
 Weights are **runtime-configurable** by the admin and normalized to sum to 1
 before scoring. The rider with the highest final score is selected.
 
+**Edge case — maxLoad = 0:** If every candidate has zero deliveries in the past
+60 minutes, `LoadScore = 1.0` for all of them — no differentiation on load.
+
+**Edge case — maxETAR = 0:** If every candidate is IDLE and at zero distance
+(degenerate), `ETARScore = 1.0` for all. In practice this cannot occur.
+
 ---
 
 ## 5. Worked Example
 
 An order comes in at Restaurant R. The k=2 ring around R contains two ONLINE
-riders:
+riders. RIDER_SPEED_KMH = 40.
 
-| Rider | Status | Progress | Dist to R | ETAR |
-|-------|--------|----------|-----------|------|
-| A | IDLE | — | 2.0 km | 0 + 400s = **400s** |
-| B | PICKED_UP | 0.85 | 0.3 km | (0.15 × 120) + 60s = **78s** |
+| Rider | Status | Progress | Dist to R | leg2Duration_s | ETAR |
+|-------|--------|----------|-----------|----------------|------|
+| A | IDLE | — | 2.0 km | — | 0 + (2.0/40)×3600 = **180s** |
+| B | PICKED_UP | 0.85 | 0.3 km | 27s (0.3 km leg) | (0.15×27) + (0.3/40)×3600 = 4 + 27 = **31s** |
 
-Rider B is still on a delivery, but only 15% of a leg left and just 300m from R.
+Rider B is still delivering, but 85% through a short final leg and only 300m from R.
 
-Normalize (maxETAR = 400):
+Normalize (maxETAR = 180):
 
 | Rider | ETARScore | RatingScore (A=4.8, B=4.2) | LoadScore (A=0, B=1 recent) |
 |-------|-----------|-----------------------------|-----------------------------|
-| A | 1 − 400/400 = **0.00** | 4.8/5 = **0.96** | 1 − 0/1 = **1.00** |
-| B | 1 − 78/400 = **0.805** | 4.2/5 = **0.84** | 1 − 1/1 = **0.00** |
+| A | 1 − 180/180 = **0.00** | 4.8/5 = **0.96** | 1 − 0/1 = **1.00** |
+| B | 1 − 31/180 = **0.828** | 4.2/5 = **0.84** | 1 − 1/1 = **0.00** |
 
 **With default weights (0.50 / 0.30 / 0.20):**
 
 ```
 A = 0.50×0.00 + 0.30×0.96 + 0.20×1.00 = 0.488
-B = 0.50×0.805 + 0.30×0.84 + 0.20×0.00 = 0.655   ← winner
+B = 0.50×0.828 + 0.30×0.84 + 0.20×0.00 = 0.666   ← winner
 ```
 
-Rider B wins — even though busy, they will arrive at the restaurant far sooner.
-Under the old v1 system, Rider A (idle, farther away) would have won because
-IDLE was the hard filter. This is the core improvement.
+Rider B wins — arriving in 31s vs Rider A's 180s. Under v1, Rider A (idle) would
+have won because IDLE was a hard filter. This is the core improvement.
 
 ---
 
@@ -251,15 +312,26 @@ assignment is unaffected.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `H3_RESOLUTION` | 7 | Hexagon zoom level |
-| `CANDIDATE_RING_SIZE` | 2 | k-ring around restaurant for rider pool |
-| `SERVICE_AREA_RING_SIZE` | 5 | k-ring for customer-restaurant pairing |
-| `AVG_LEG_DURATION` | 120s | Estimated seconds per delivery leg |
-| `AVG_SPEED_KM_PER_SEC` | 0.005 | ~18 km/h for ETAR travel time |
+| `H3_RESOLUTION` | 7 | Hexagon zoom level — used for both rider index and service area |
+| `CANDIDATE_RING_SIZE` | 2 | k-ring around restaurant for rider candidate pool (~4–5 km radius) |
+| `SERVICE_AREA_RING_SIZE` | 5 | k-ring for customer-restaurant pairing (~8–10 km radius) |
+| `RIDER_SEED_COUNT` | 30–35 | Recommended fleet size — gives ~6–8 candidates per order with res 7 k=2 |
+| `RIDER_SPEED_KMH` | 40 | Constant speed for all riders — used for both ETAR and movement |
+| `TICK_INTERVAL_MS` | 1000 | Heartbeat interval; riders broadcast position every tick |
+| `MAX_ALLOCATION_RETRIES` | 10 | Failed allocation ticks before an order is moved to back of queue |
 | `w_etar` | 0.50 | Weight for ETAR score |
 | `w_rating` | 0.30 | Weight for rating score |
 | `w_load` | 0.20 | Weight for load score |
 | `LOAD_WINDOW_MINUTES` | 60 | Rolling window for recent-load counting |
+
+**Why res 7 k=2 for candidates?** At res 7 (edge ~1.22 km), k=2 covers ~4–5 km —
+a 12–15 minute motorbike ride at 20 km/h. This matches the real-world assignment
+radius used by Swiggy and Zomato. A tighter zone (e.g. res 8 k=2, ~1.5 km) causes
+frequent "no candidates" events with a 30-rider fleet spread across a city.
+
+**Why res 7 k=5 for service area?** The service area check runs once at order
+creation (not per tick) and needs ~8–10 km coverage to match realistic delivery
+range. Res 7 k=5 gives exactly that with 91 hexagons — efficient and correct.
 
 ---
 
