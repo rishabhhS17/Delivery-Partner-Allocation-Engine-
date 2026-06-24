@@ -37,7 +37,7 @@ active customer** from these collections, and snapshots their details onto the o
 | `currentOrderId`     | ObjectId  | no       | Ref → `orders`, the order currently being delivered          |
 | `nextOrderId`        | ObjectId  | no       | Ref → `orders`; pre-assigned order queued for when this rider goes `IDLE` |
 | `deliveryTimestamps` | [Date]    | no       | Timestamps of each completed delivery; used for `recentLoad` (count entries > now − 60 min). Append on `DELIVERED`; prune entries older than 60 min when reading. |
-| `isSimulated`        | Boolean   | yes      | `true` for dummy riders, `false` for real logged-in partners |
+| `isSimulated`        | Boolean   | yes      | `true` for riders seeded by `seed.js`; `false` for real partner accounts |
 | `createdAt`          | Date      | yes      | Creation timestamp                                           |
 
 > A rider enters the geo-candidate pool when `availabilityStatus === 'ONLINE'`,
@@ -60,6 +60,7 @@ so that historical orders referencing it are never broken.
 | `phone`      | String   | no       | Contact number                         |
 | `latitude`   | Number   | yes      | Pickup latitude                        |
 | `longitude`  | Number   | yes      | Pickup longitude                       |
+| `h3Index`    | String   | yes      | H3 cell at resolution 7 — computed from lat/lng at creation; enables `$in` service-area queries at scale |
 | `isActive`   | Boolean  | yes      | Default `true`; `false` = soft-deleted |
 | `createdAt`  | Date     | yes      | Creation timestamp                     |
 
@@ -79,6 +80,7 @@ reason as restaurants.
 | `address`    | String   | no       | Human-readable delivery address        |
 | `latitude`   | Number   | yes      | Drop-off latitude                      |
 | `longitude`  | Number   | yes      | Drop-off longitude                     |
+| `h3Index`    | String   | yes      | H3 cell at resolution 7 — computed from lat/lng at creation; enables `$in` service-area queries at scale |
 | `isActive`   | Boolean  | yes      | Default `true`; `false` = soft-deleted |
 | `createdAt`  | Date     | yes      | Creation timestamp                     |
 
@@ -110,7 +112,6 @@ breaks the map.
 | `progress`          | Number    | no       | 0–1 progress along current leg — derived from `legStartedAt`, stored for WebSocket broadcast |
 | `queuedAt`          | Date      | no       | When the order last entered `PENDING` queue — initial creation or re-queue after rider drop |
 | `allocationScore`   | Number    | no       | Final score of the chosen rider                             |
-| `allocationReason`  | String    | no       | Human-readable explanation                                  |
 | `createdAt`         | Date      | yes      | When the order was created                                  |
 | `assignedAt`        | Date      | no       | When a rider was assigned                                   |
 | `pickedUpAt`        | Date      | no       | When the rider reached the restaurant                       |
@@ -130,7 +131,6 @@ One record per allocation decision — a full audit trail.
 | `orderId`              | ObjectId | yes      | Ref → `orders`                                        |
 | `riderId`              | ObjectId | yes      | Ref → `riders` (the winner)                           |
 | `allocationScore`      | Number   | yes      | Winning final score                                    |
-| `allocationReason`     | String   | yes      | Explanation text                                       |
 | `breakdown`            | Mixed    | no       | Per-factor sub-scores (ETAR/rating/load + raw ETAR seconds) |
 | `candidatesConsidered` | Number   | no       | How many eligible riders were scored                   |
 | `createdAt`            | Date     | yes      | Decision timestamp                                     |
@@ -159,7 +159,7 @@ One record per login. Partners link to a `Rider` document; admins do not.
 
 ```
 restaurants ──┐
-              ├──< orders >──┬── assignedRiderId ──> riders
+              ├──< orders >──┬── assignedRiderId ──> riders <── riderId── users
 customers ────┘              └──< allocationhistory >── riders
 ```
 
@@ -168,6 +168,7 @@ customers ────┘              └──< allocationhistory >── ride
 - `orders.assignedRiderId` → `riders._id`
 - `allocationhistory.orderId` → `orders._id`
 - `allocationhistory.riderId` → `riders._id`
+- `users.riderId` → `riders._id` (null for admin accounts)
 
 All references are kept **alongside snapshots** of the fields the map needs, so the
 system stays correct even if the referenced restaurant or customer is later removed.
@@ -179,13 +180,17 @@ system stays correct even if the referenced restaurant or customer is later remo
 When an order is created (auto cron or admin action):
 
 1. Select a **random active restaurant** from `restaurants` (`isActive: true`).
-2. Select a **random active customer** from `customers` (`isActive: true`).
-3. Snapshot both records' name and coordinates onto the new order.
-4. Save the order with `status: PENDING`.
-5. The allocation engine assigns a rider on the next tick (or queues it if none free).
+2. Compute the restaurant's H3 service area: `gridDisk(restaurant.h3Index, H3_SERVICE_AREA_K)` → 91 cells.
+3. Query eligible customers: `customers.find({ h3Index: { $in: serviceAreaCells }, isActive: true })` — DB-level spatial filter, scales to any collection size.
+4. Pick a random customer from the result. If none found, retry with a different restaurant (up to 10 attempts).
+5. Snapshot both records' name and coordinates onto the new order.
+6. Save the order with `status: PENDING`.
+7. The allocation engine assigns a rider on the next tick (or queues it if none free).
 
-> Both restaurants and customers should be seeded/placed within the Ranchi
-> coordinate bounding box so they render sensibly on the map.
+> `h3Index` on both restaurants and customers is computed at creation time from
+> lat/lng and never changes (soft-delete + recreate is the update pattern).
+> The compound index `{ h3Index: 1, isActive: 1 }` makes step 3 an indexed range
+> scan regardless of collection size.
 
 ---
 
@@ -242,6 +247,6 @@ event), and the in-memory structures are rebuilt.
 | `riders`            | `{ availabilityStatus: 1, status: 1 }`                   | Admin views filtering by availability + movement state  |
 | `orders`            | `{ status: 1, createdAt: 1 }`                            | FIFO queue scan of `PENDING` orders                     |
 | `orders`            | `{ assignedRiderId: 1, deliveredAt: 1 }`                 | Recent-load aggregation for fairness scoring            |
-| `restaurants`       | `{ isActive: 1 }`                                        | Random active-restaurant selection                      |
-| `customers`         | `{ isActive: 1 }`                                        | Random active-customer selection                        |
+| `restaurants`       | `{ h3Index: 1, isActive: 1 }`                            | Service-area `$in` query: find restaurants within k=5 of a customer's cell |
+| `customers`         | `{ h3Index: 1, isActive: 1 }`                            | Service-area `$in` query: find customers within k=5 of a restaurant's cell |
 | `allocationhistory` | `{ orderId: 1 }`                                         | Look up the decision for a given order                  |

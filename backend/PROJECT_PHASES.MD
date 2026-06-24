@@ -202,17 +202,11 @@ Exported function: `allocateOrder(order, h3Buckets, riderState, weights)`
 7. Return winner { riderId, score, breakdown, ETAR } or null if no candidates
 ```
 
-**`generateReason(winner, breakdown)`** — Phase 1 is template-only, no AI dependency:
-```
-"${name} selected: ~${km}km away, ~${mins}min ETAR, rated ${rating}/5, ${load} recent deliveries."
-```
-AI rewrite (Gemini `gemini-1.5-flash`) is a B12 enhancement — wrap this function with the API call later, keep the template as fallback.
-
 **Also add routes:**
 - `src/routes/allocation.js` → `POST /allocate-order` (admin manual trigger), `GET /allocation-history`
 - `src/routes/configRoutes.js` → `GET /config/weights`, `PUT /config/weights`
 
-**Done when:** posting an order ID to `/allocate-order` returns `{ riderId, score, breakdown, reason }` and writes an `AllocationHistory` record. Busy riders near the restaurant beat idle riders farther away.
+**Done when:** posting an order ID to `/allocate-order` returns `{ riderId, score, breakdown }` and writes an `AllocationHistory` record. Busy riders near the restaurant beat idle riders farther away.
 
 ---
 
@@ -410,7 +404,6 @@ Also add: `PUT /orders/:id/accept` — partner accepts assigned order (for Phase
 |---|---|---|
 | **Stale order backoff** | `simulation.js` | After `MAX_ALLOCATION_RETRIES` failed ticks, move order to back of queue (`queuedAt=now`, priority=0) |
 | **nextOrderId offline** | `simulation.js` `handleRiderOffline()` | If rider has `nextOrderId`, reset that order to PENDING at priority 0; clear `nextOrderId` |
-| **AI reason** | `allocationEngine.js` | Gemini API call is already wired; just implement the actual prompt |
 | **SLA flagging** | `simulation.js` + analytics | Flag orders where `now - queuedAt > SLA_THRESHOLD_MS`; add `isSlaBreached` to broadcast |
 | **Road routing (Phase 2 seam)** | `routingService.js` + `simulation.js` | Replace 2-point Haversine polyline with Mapbox Directions `driving` profile. Called once at assignment. Frontend renders same `polyline` array unchanged. Required before B13. |
 
@@ -567,7 +560,7 @@ io.emit('simulation:tick', {
 | B9 | `server.js` WS wiring | Sim starts/stops with clients |
 | B10 | `routes/auth.js` + middleware | JWT auth works |
 | B11 | `routes/analytics.js` | Dashboard aggregates correct |
-| B12 | Enhancements (stale backoff, SLA, AI reason, road routing) | Per priority |
+| B12 | Enhancements (stale backoff, SLA, road routing) | Per priority |
 | B13 | Traffic-adaptive speed (single snapshot, segment traversal model) | Riders slow in traffic |
 | B14 | Deploy config | Live on Render + Atlas |
 

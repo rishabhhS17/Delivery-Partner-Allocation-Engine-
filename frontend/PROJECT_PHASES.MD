@@ -38,11 +38,11 @@ The system has a **pluggable routing seam** — the `polyline` field on Order is
 
 | Phase | What changes | Where |
 |---|---|---|
-| **B7 / B8 (Phase 1 — now)** | `polyline` = 2 Haversine points `[{rider}, {restaurant}]` and `[{restaurant}, {customer}]`. Riders move in straight lines, may pass through buildings. Speed = constant **40 km/h**. | `orderGenerator.js` / `simulation.js` |
-| **B12 enhancement (Phase 2)** | Replace the 2-point polyline with a real road polyline from **Mapbox Directions API** or **Google Routes API**. Backend calls the routing API at assignment time, gets back a full road geometry, stores it as `polyline` on the order. Rider movement now follows actual roads. Speed still 40 km/h (constant). Frontend changes **nothing** — it renders whatever array length comes back. | `simulation.js` assignment step |
-| **Phase 3 (not in scope)** | Adjust `RIDER_SPEED_KMH` dynamically per road segment using a real-time traffic API (Mapbox Traffic, Google Traffic). ETAR becomes traffic-aware. This is a significant addition — constant 40 km/h is the deliberate Phase 1 decision. | `constants.js`, `allocationEngine.js`, `simulation.js` |
+| **B7 / B8 (Phase 1 — now)** | `polyline` = 2 Haversine points `[{rider}, {restaurant}]` and `[{restaurant}, {customer}]`. Riders move in straight lines. Speed = constant **40 km/h**. | `orderGenerator.js` / `simulation.js` |
+| **B12 enhancement (Phase 2)** | Replace 2-point polyline with real road geometry from **Mapbox Directions API** (`driving` profile). Called once at assignment. Rider movement follows actual roads. Speed still constant 40 km/h. Frontend changes **nothing** — it renders whatever `polyline` array length comes back. | `routingService.js` + `simulation.js` |
+| **B13 enhancement (Phase 3 — final)** | Upgrade to **Mapbox Directions `driving-traffic`** + `annotations=speed,congestion`. Single snapshot at allocation time — per-segment traffic speeds stored in memory. Tick budget = `segmentSpeed_ms × TICK_S` (min 3 m/s). `leg1Duration_s`/`leg2Duration_s` now traffic-aware. Frontend `OrderMap.jsx` colors route by congestion level. | `routingService.js` + `simulation.js` + `OrderMap.jsx` |
 
-> **Bottom line:** straight-line Haversine is the current design. Real roads land in **B12** (backend only, frontend unchanged). Traffic-adaptive speed is **not in scope**.
+> **Bottom line:** straight-line Haversine is Phase 1. Real roads (B12) and traffic-adaptive speed (B13) are the final two enhancements — both backend-driven, both using Mapbox exclusively.
 
 ---
 
@@ -453,5 +453,7 @@ src/
 > **Frontend MVP gate:** F1–F9. The full allocation loop is visible end-to-end.
 > F10–F12 make it credible. F13 makes it memorable.
 >
-> **Real road routing** lands in backend **B12** (Mapbox/Google Directions API replaces
-> Haversine polyline). Frontend renders it unchanged. Traffic-adaptive speed is out of scope.
+> **Real road routing** lands in backend **B12** (Mapbox Directions API replaces Haversine
+> polyline — frontend renders it unchanged). **Traffic-adaptive speed** lands in backend **B13**
+> (single Mapbox `driving-traffic` snapshot at allocation time — frontend colors the route by
+> congestion in `OrderMap.jsx`, no speed math on the frontend side).
