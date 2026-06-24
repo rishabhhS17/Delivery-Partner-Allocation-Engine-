@@ -85,23 +85,37 @@ on the map:
 On delivery the rider returns to `IDLE` and becomes available again. A separate
 `availabilityStatus` (`ONLINE` / `OFFLINE`) represents whether a rider is on shift
 at all — this is what a real human partner would toggle, while the simulator keeps
-dummy riders permanently online. A rider is only considered for allocation when it
-is both `ONLINE` and `IDLE`.
+dummy riders permanently online. A rider enters the allocation candidate pool when
+`ONLINE` regardless of movement status — ETAR accounts for how long a busy rider
+needs to finish their current delivery.
 
 ### 2.5 Movement simulation
 
-Because there is no real GPS, rider positions are simulated with **linear
-interpolation**. When an order is assigned, the system computes a route (a
-straight line for simplicity, or a routing-service polyline). On every tick the
-rider advances a fixed fraction (5%) of the current leg toward its destination —
-so each leg completes in a predictable number of ticks. Updated positions are
-saved and streamed to all connected clients over **WebSockets**, so every viewer
-sees an identical, synchronized map.
+Because there is no real GPS, rider positions are simulated at a **constant speed
+of 40 km/h**. When a leg starts, the system records `legStartedAt = Date.now()` and
+the leg distance (Haversine). Progress at any moment is:
 
-The movement loop runs on the **backend**, which is the single source of truth.
-If position calculations ran on the frontend, multiple viewers would drift out of
-sync and nothing would persist. To conserve resources, the loop only runs while at
-least one client is connected.
+```
+legDuration_ms = (legDistance_km / 40) × 3,600,000
+progress       = min(1.0, (Date.now() − legStartedAt) / legDuration_ms)
+```
+
+This is wall-clock driven — no fixed "% per tick" step. A 2 km leg takes exactly
+180 seconds regardless of tick rate. Riders automatically catch up to the correct
+position on reconnect, so no simulation state is lost during idle periods.
+
+Routes are stored as a `polyline: [{lat, lng}]`. **Phase 1:** two points
+(straight Haversine line — riders pass through buildings). **Phase 2:** full road
+geometry from a routing API (Mapbox Directions or Google Routes). The movement
+engine walks the polyline at constant speed regardless of point count — routing
+is a pluggable seam that never touches the ETAR or scoring logic.
+
+The movement loop ticks every `TICK_INTERVAL_MS = 1000ms`, broadcasting updated
+rider positions over WebSockets. MongoDB is written only at lifecycle events
+(assignment, pickup, delivery, availability toggle) — ~20× fewer writes than
+tick-by-tick. On restart the in-memory state is rebuilt from MongoDB.
+
+To conserve resources, the loop only runs while at least one client is connected.
 
 ### 2.6 Order generation and the queue
 
@@ -150,6 +164,27 @@ intentional denormalization for data integrity.
 **Deterministic core, AI on the edge.** The allocation logic is rule-based and
 reproducible; AI is confined to generating explanations. This preserves
 predictability and debuggability.
+
+**In-memory H3 bucket map for O(1) geo-filtering.** The simulation module maintains
+two in-memory structures: a `riderState` map (riderId → full rider object) and an
+`h3Buckets` map (H3 cell → Set of riderIds). The allocation engine looks up
+candidates by unioning the 19 cells in the k=2 ring — O(19 + C) per order, zero
+MongoDB queries on the hot path. This is the same indexing pattern used by Uber
+and Swiggy at scale; the in-process Map can be swapped for Redis if the system
+ever scales horizontally without changing the allocation interface.
+
+**Pluggable routing seam.** Phase 1 uses Haversine straight-line routes (two
+`{lat, lng}` points). Phase 2 replaces this with real road geometry from a routing
+API (Mapbox Directions or Google Routes). Both ETAR and movement use the same
+`polyline` array — the engine walks it at constant speed. Swapping routing never
+requires touching the allocation or scoring logic.
+
+**Res 7 k=2 for candidates, res 7 k=5 for service area.** Both use resolution 7 —
+consistent, no per-collection resolution mapping. k=2 (~4–5 km radius) is the
+right motorbike-delivery assignment range; k=5 (~8–10 km) covers a realistic
+customer delivery radius. A tighter candidate zone (e.g. res 8 k=2, ~1.5 km)
+causes frequent "no candidates" events with a 30-rider fleet and is not justified
+by the performance benefit since the bucket map already makes geo-filtering O(1).
 
 ---
 
@@ -202,10 +237,10 @@ The backend logic is organized into focused modules:
 | `models.js`           | Mongoose schemas: Rider, Restaurant, Customer, Order, AllocationHistory         |
 | `allocationEngine.js` | H3 geo-filter, ETAR computation, normalized weighted scoring, reason generation |
 | `orderGenerator.js`   | Random order creation with H3 service area validation, single + bulk + auto-cron|
-| `simulation.js`       | Tick loop: queue processing, movement, state machine, WS broadcast              |
+| `simulation.js`       | Tick loop: queue processing, movement, state machine, WS broadcast; owns in-memory `riderState` map and `h3Buckets` index; lifecycle-event DB flushes |
 
 **Data model (high level):**
-- **Rider** — name, location, rating, `availabilityStatus`, movement `status`, active-order count, current order.
+- **Rider** — name, location, `h3Index` (pre-computed H3 cell at res 7), rating, `availabilityStatus`, movement `status`, active-order count, current order.
 - **Restaurant** — name, location, active flag (admin can add / soft-delete).
 - **Order** — restaurant snapshot, customer location, assigned rider, status, route + progress, allocation score and reason, lifecycle timestamps.
 - **AllocationHistory** — per-decision audit trail with the full score breakdown.

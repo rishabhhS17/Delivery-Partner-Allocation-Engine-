@@ -29,11 +29,13 @@ active customer** from these collections, and snapshots their details onto the o
 | `phone`              | String    | no       | Contact number                                               |
 | `latitude`           | Number    | yes      | Current latitude                                             |
 | `longitude`          | Number    | yes      | Current longitude                                            |
+| `h3Index`            | String    | yes      | H3 cell at resolution 7 — pre-computed from lat/lng, used for geo-filter lookups |
 | `rating`             | Number    | yes      | 1–5, default 4                                               |
 | `availabilityStatus` | Enum      | yes      | `ONLINE` / `OFFLINE` — shift state a human partner toggles   |
 | `status`             | Enum      | yes      | `IDLE` / `ACCEPTED` / `PICKED_UP` — movement state machine   |
 | `activeOrders`       | Number    | yes      | Count of active orders (0 or 1 with one-at-a-time)           |
 | `currentOrderId`     | ObjectId  | no       | Ref → `orders`, the order currently being delivered          |
+| `nextOrderId`        | ObjectId  | no       | Ref → `orders`; pre-assigned order queued for when this rider goes `IDLE` |
 | `isSimulated`        | Boolean   | yes      | `true` for dummy riders, `false` for real logged-in partners |
 | `createdAt`          | Date      | yes      | Creation timestamp                                           |
 
@@ -100,8 +102,12 @@ breaks the map.
 | `customerLng`       | Number    | yes      | **Snapshot** of drop-off longitude                         |
 | `assignedRiderId`   | ObjectId  | no       | Ref → `riders`; null while `PENDING`                       |
 | `status`            | Enum      | yes      | `PENDING` / `ASSIGNED` / `PICKED_UP` / `DELIVERED` / `CANCELLED` |
-| `route`             | Array     | no       | Current leg as `[{lat,lng}, {lat,lng}]` for animation       |
-| `progress`          | Number    | no       | 0–1 progress along the current leg                          |
+| `polyline`          | Array     | no       | Route geometry as `[{lat,lng}]` — two points (Phase 1 Haversine), full road polyline (Phase 2) |
+| `leg1Duration_s`    | Number    | no       | Duration of leg 1 (rider → restaurant) in seconds at 40 km/h |
+| `leg2Duration_s`    | Number    | no       | Duration of leg 2 (restaurant → customer) in seconds at 40 km/h |
+| `legStartedAt`      | Date      | no       | Timestamp when current leg began; `progress = (now − legStartedAt) / legDuration_s` |
+| `progress`          | Number    | no       | 0–1 progress along current leg — derived from `legStartedAt`, stored for WebSocket broadcast |
+| `queuedAt`          | Date      | no       | When the order last entered `PENDING` queue — initial creation or re-queue after rider drop |
 | `allocationScore`   | Number    | no       | Final score of the chosen rider                             |
 | `allocationReason`  | String    | no       | Human-readable explanation                                  |
 | `createdAt`         | Date      | yes      | When the order was created                                  |
@@ -164,13 +170,42 @@ When an order is created (auto cron or admin action):
 
 ---
 
-## 5. Suggested Indexes
+## 5. Rider Position Write Strategy
 
-| Collection          | Index                                   | Why                                          |
-|---------------------|-----------------------------------------|----------------------------------------------|
-| `riders`            | `{ availabilityStatus: 1, status: 1 }`  | Fast lookup of ONLINE riders for geo-candidate pool |
-| `orders`            | `{ status: 1, createdAt: 1 }`           | FIFO queue scan of `PENDING` orders          |
-| `orders`            | `{ assignedRiderId: 1, deliveredAt: 1 }`| Recent-load aggregation for fairness scoring |
-| `restaurants`       | `{ isActive: 1 }`                        | Random active-restaurant selection           |
-| `customers`         | `{ isActive: 1 }`                        | Random active-customer selection             |
-| `allocationhistory` | `{ orderId: 1 }`                         | Look up the decision for a given order        |
+Rider positions change on every simulation tick (~20 updates per delivery). Writing
+to MongoDB on every tick would produce ~20× more writes than necessary and add
+latency to the hot path. Instead, **position and `h3Index` are written to MongoDB
+only at lifecycle events** — the moments when the state genuinely changes and
+persistence is required:
+
+| Event | Fields written |
+|---|---|
+| Rider assigned (→ `ACCEPTED`) | `latitude`, `longitude`, `h3Index`, `status`, `currentOrderId`, `activeOrders`; order: `status=ASSIGNED`, `assignedRiderId`, `assignedAt`, `leg1Duration_s`, `leg2Duration_s`, `legStartedAt`, `polyline` |
+| Busy rider pre-assigned (`nextOrderId` set) | `rider.nextOrderId`; order: `status=ASSIGNED`, `assignedRiderId`, `assignedAt` |
+| Rider reaches restaurant (→ `PICKED_UP`) | `latitude`, `longitude`, `h3Index`, `status`; order: `status=PICKED_UP`, `pickedUpAt`, `legStartedAt` (reset for leg 2) |
+| Rider delivers (→ `IDLE`) | `latitude`, `longitude`, `h3Index`, `status`, `currentOrderId=null`, `activeOrders=0`; order: `status=DELIVERED`, `deliveredAt` |
+| Rider goes `OFFLINE` while `ACCEPTED` | `rider.availabilityStatus=OFFLINE`, `status=OFFLINE`, `currentOrderId=null`; order: `status=PENDING`, `assignedRiderId=null`, `assignedAt=null`, `queuedAt=now` |
+| Rider goes `OFFLINE` while holding `nextOrderId` | `rider.nextOrderId=null`; order: `status=PENDING`, `assignedRiderId=null`, `queuedAt=now` |
+| Rider toggles `ONLINE` | `availabilityStatus=ONLINE`, `status=IDLE` |
+
+This is 3–4 writes per delivery cycle. Between events, the **in-memory rider state**
+(maintained by `simulation.js`) is the authoritative source for live position and
+`h3Index`. The allocation engine reads from memory, not MongoDB, on every tick.
+
+On server restart, MongoDB provides the recovery snapshot: all riders are loaded,
+their `h3Index` fields are trusted as-is (they were written at the last lifecycle
+event), and the in-memory structures are rebuilt.
+
+---
+
+## 6. Suggested Indexes
+
+| Collection          | Index                                                    | Why                                                     |
+|---------------------|----------------------------------------------------------|---------------------------------------------------------|
+| `riders`            | `{ availabilityStatus: 1, h3Index: 1 }`                  | Cold-path geo-filter queries and recovery on restart    |
+| `riders`            | `{ availabilityStatus: 1, status: 1 }`                   | Admin views filtering by availability + movement state  |
+| `orders`            | `{ status: 1, createdAt: 1 }`                            | FIFO queue scan of `PENDING` orders                     |
+| `orders`            | `{ assignedRiderId: 1, deliveredAt: 1 }`                 | Recent-load aggregation for fairness scoring            |
+| `restaurants`       | `{ isActive: 1 }`                                        | Random active-restaurant selection                      |
+| `customers`         | `{ isActive: 1 }`                                        | Random active-customer selection                        |
+| `allocationhistory` | `{ orderId: 1 }`                                         | Look up the decision for a given order                  |
