@@ -20,7 +20,8 @@
 | POST   | `/orders/bulk`            | Create N orders at once                   |
 | GET    | `/orders`                 | List orders                               |
 | GET    | `/orders/:id`             | Order details                             |
-| POST   | `/allocate-order`         | Trigger allocation for an order           |
+| PUT    | `/orders/:id/accept`      | Delivery partner accepts their assigned order (transitions ASSIGNED → active) |
+| POST   | `/allocate-order`         | Admin: manually trigger allocation for a specific order |
 | GET    | `/allocation-history`     | Allocation audit trail                    |
 | GET    | `/config/weights`         | Get current scoring weights               |
 | PUT    | `/config/weights`         | Update scoring weights (normalized to 1)  |
