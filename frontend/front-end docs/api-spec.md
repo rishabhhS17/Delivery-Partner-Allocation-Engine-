@@ -295,8 +295,7 @@ Admin
   "success": true,
   "orderId": "6654c2b123456789abcdef01",
   "assignedRiderId": "6654c2b123456789abcdef02",
-  "allocationScore": 0.87,
-  "allocationReason": "Rahul was selected because he is the closest available rider with a high rating and low workload."
+  "allocationScore": 0.87
 }
 ```
 
