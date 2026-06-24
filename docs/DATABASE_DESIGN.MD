@@ -36,6 +36,7 @@ active customer** from these collections, and snapshots their details onto the o
 | `activeOrders`       | Number    | yes      | Count of active orders (0 or 1 with one-at-a-time)           |
 | `currentOrderId`     | ObjectId  | no       | Ref → `orders`, the order currently being delivered          |
 | `nextOrderId`        | ObjectId  | no       | Ref → `orders`; pre-assigned order queued for when this rider goes `IDLE` |
+| `deliveryTimestamps` | [Date]    | no       | Timestamps of each completed delivery; used for `recentLoad` (count entries > now − 60 min). Append on `DELIVERED`; prune entries older than 60 min when reading. |
 | `isSimulated`        | Boolean   | yes      | `true` for dummy riders, `false` for real logged-in partners |
 | `createdAt`          | Date      | yes      | Creation timestamp                                           |
 
@@ -136,6 +137,24 @@ One record per allocation decision — a full audit trail.
 
 ---
 
+### 2.6 `users`  *(auth — admin and delivery partners)*
+
+One record per login. Partners link to a `Rider` document; admins do not.
+
+| Field          | Type     | Required | Notes                                           |
+|----------------|----------|----------|-------------------------------------------------|
+| `_id`          | ObjectId | auto     | Primary key                                     |
+| `email`        | String   | yes      | Unique; used as login username                  |
+| `passwordHash` | String   | yes      | bcrypt hash — never store plaintext             |
+| `role`         | Enum     | yes      | `'admin'` \| `'partner'`                        |
+| `riderId`      | ObjectId | no       | Ref → `riders`; `null` for admin accounts       |
+| `createdAt`    | Date     | yes      | Creation timestamp                              |
+
+> **Seed:** create one admin user in `seed.js` (`email: admin@demo.com`, role: `admin`, `riderId: null`).
+> Partner accounts are created manually (one per simulated rider is not required — partners log in to view their assigned delivery only).
+
+---
+
 ## 3. Relationships
 
 ```
@@ -170,12 +189,29 @@ When an order is created (auto cron or admin action):
 
 ---
 
-## 5. Rider Position Write Strategy
+## 5. Partner Order Accept Flow
 
-Rider positions change on every simulation tick (~20 updates per delivery). Writing
-to MongoDB on every tick would produce ~20× more writes than necessary and add
-latency to the hot path. Instead, **position and `h3Index` are written to MongoDB
-only at lifecycle events** — the moments when the state genuinely changes and
+`PUT /orders/:id/accept` — called by a delivery partner to acknowledge their assigned order.
+
+**Precondition:** `order.status === 'ASSIGNED'` and `order.assignedRiderId === req.user.riderId`
+
+**What it writes:**
+- `order.acceptedAt = now` (optional timestamp — added to Order schema if needed)
+- Returns the updated order
+
+**What it does NOT do:**
+- Does not change `order.status` — status is driven by the simulation (ASSIGNED → PICKED_UP → DELIVERED)
+- Does not interact with the in-memory simulation state
+- Phase 1 simulated riders never call this endpoint; it exists for real partner logins only
+
+---
+
+## 6. Rider Position Write Strategy
+
+Rider positions are updated in memory on every simulation tick — at 40 km/h a 2 km
+leg is ~180 ticks. Writing to MongoDB on every tick would produce ~180× more writes
+than necessary and add latency to the hot path. Instead, **position and `h3Index`
+are written to MongoDB only at lifecycle events** — the moments when the state genuinely changes and
 persistence is required:
 
 | Event | Fields written |
@@ -185,7 +221,7 @@ persistence is required:
 | Rider reaches restaurant (→ `PICKED_UP`) | `latitude`, `longitude`, `h3Index`, `status`; order: `status=PICKED_UP`, `pickedUpAt`, `legStartedAt` (reset for leg 2) |
 | Rider delivers (→ `IDLE`) | `latitude`, `longitude`, `h3Index`, `status`, `currentOrderId=null`, `activeOrders=0`; order: `status=DELIVERED`, `deliveredAt` |
 | Rider goes `OFFLINE` while `ACCEPTED` | `rider.availabilityStatus=OFFLINE`, `status=OFFLINE`, `currentOrderId=null`; order: `status=PENDING`, `assignedRiderId=null`, `assignedAt=null`, `queuedAt=now` |
-| Rider goes `OFFLINE` while holding `nextOrderId` | `rider.nextOrderId=null`; order: `status=PENDING`, `assignedRiderId=null`, `queuedAt=now` |
+| Rider goes `OFFLINE` while holding `nextOrderId` *(enhancement)* | `rider.nextOrderId=null`; order: `status=PENDING`, `assignedRiderId=null`, `queuedAt=now` |
 | Rider toggles `ONLINE` | `availabilityStatus=ONLINE`, `status=IDLE` |
 
 This is 3–4 writes per delivery cycle. Between events, the **in-memory rider state**
@@ -198,7 +234,7 @@ event), and the in-memory structures are rebuilt.
 
 ---
 
-## 6. Suggested Indexes
+## 7. Suggested Indexes
 
 | Collection          | Index                                                    | Why                                                     |
 |---------------------|----------------------------------------------------------|---------------------------------------------------------|

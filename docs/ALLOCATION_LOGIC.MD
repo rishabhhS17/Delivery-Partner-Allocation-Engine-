@@ -284,13 +284,19 @@ have won because IDLE was a hard filter. This is the core improvement.
 
 ## 6. Edge Cases
 
-| Scenario | Behaviour |
-|----------|-----------|
-| No ONLINE riders in k=2 ring | Order stays `PENDING` in FIFO queue, retried next tick |
-| Single candidate | maxETAR = that candidate's ETAR; ETARScore = 1.0 |
-| All candidates tie | First in iteration order wins (stable query order) |
-| All-zero weights supplied | Engine falls back to default weights |
-| No valid restaurant-customer pair in service area | Order generator retries with a different restaurant (max 10 attempts) |
+| Scenario | Phase | Behaviour |
+|----------|-------|-----------|
+| No ONLINE riders in k=2 ring | Core | Order stays `PENDING` in FIFO queue, retried next tick |
+| Assigned (`ACCEPTED`) rider goes `OFFLINE` | Core | Order reset to `PENDING`, `queuedAt = now`, pushed to **front** of queue at priority 1; rider cleared |
+| Pre-assigned rider (`nextOrderId`) goes `OFFLINE` | Enhancement | Order reset to `PENDING`, re-queued at back at normal priority |
+| Order still unassigned after `MAX_ALLOCATION_RETRIES` ticks | Enhancement | Order moved to back of queue (`queuedAt = now`) to unblock newer orders |
+| Single candidate | Core | maxETAR = that candidate's ETAR; ETARScore = 1.0 |
+| All candidates tie | Core | First in iteration order wins (stable query order) |
+| All-zero weights supplied | Core | Engine falls back to default weights |
+| No valid restaurant-customer pair in service area | Core | Order generator retries with a different restaurant (max 10 attempts) |
+
+> **Out of scope:** `PICKED_UP` rider going offline mid-delivery is not handled.
+> The order remains `ASSIGNED` and does not re-queue.
 
 ---
 
@@ -302,7 +308,7 @@ After the winner is chosen, a plain-language reason is generated, e.g.:
 > than all other candidates despite currently completing a delivery. Rated 4.2/5."*
 
 A deterministic template always generates this from the score breakdown. An AI
-model (OpenAI / Gemini) can optionally rewrite it more naturally. The AI never
+model (Gemini *(enhancement)*) can optionally rewrite it more naturally. The AI never
 selects the rider — if the AI call fails, the template reason is used and the
 assignment is unaffected.
 
@@ -318,14 +324,14 @@ assignment is unaffected.
 | `RIDER_SEED_COUNT` | 30–35 | Recommended fleet size — gives ~6–8 candidates per order with res 7 k=2 |
 | `RIDER_SPEED_KMH` | 40 | Constant speed for all riders — used for both ETAR and movement |
 | `TICK_INTERVAL_MS` | 1000 | Heartbeat interval; riders broadcast position every tick |
-| `MAX_ALLOCATION_RETRIES` | 10 | Failed allocation ticks before an order is moved to back of queue |
+| `MAX_ALLOCATION_RETRIES` | 10 | *(Enhancement)* Failed allocation ticks before an order is moved to back of queue |
 | `w_etar` | 0.50 | Weight for ETAR score |
 | `w_rating` | 0.30 | Weight for rating score |
 | `w_load` | 0.20 | Weight for load score |
 | `LOAD_WINDOW_MINUTES` | 60 | Rolling window for recent-load counting |
 
 **Why res 7 k=2 for candidates?** At res 7 (edge ~1.22 km), k=2 covers ~4–5 km —
-a 12–15 minute motorbike ride at 20 km/h. This matches the real-world assignment
+a 6–7 minute motorbike ride at 40 km/h. This matches the real-world assignment
 radius used by Swiggy and Zomato. A tighter zone (e.g. res 8 k=2, ~1.5 km) causes
 frequent "no candidates" events with a 30-rider fleet spread across a city.
 
@@ -490,7 +496,7 @@ After the winner is chosen, the engine produces a plain-language reason, e.g.:
 > *"Rahul was selected: ~1.2 km away (closest available), rated 4.8/5, no recent deliveries."*
  
 A deterministic template generates this from the score breakdown, so it always
-works. An AI model (OpenAI / Gemini) can optionally rewrite it more naturally, but
+works. An AI model (Gemini *(enhancement)*) can optionally rewrite it more naturally, but
 **the AI never selects the rider** — if the AI call fails, the template reason is
 used and the assignment is unaffected. This keeps the system predictable, debuggable,
 and fully reproducible.

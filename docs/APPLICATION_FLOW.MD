@@ -73,10 +73,13 @@ On each tick, the engine processes the **PENDING queue** in FIFO order. For each
    busy riders estimate it from their current delivery progress.
 4. **Score** each candidate using normalized ETAR, Rating, and Load (weighted) and
    **select** the highest score.
-5. Mark the order **`ASSIGNED`**, set the rider to **`ACCEPTED`**, build a route from
-   the rider to the restaurant, and write an **allocation history** record with the
-   score breakdown and AI/template reason. Flush the rider's updated position,
-   `h3Index`, and status to MongoDB (lifecycle event write).
+5. **If the winner is IDLE:** mark the order `ASSIGNED`, transition the rider to
+   `ACCEPTED`, build the route and leg durations, flush to MongoDB (lifecycle event
+   write), and write an allocation history record with the score and AI/template reason.
+   **If the winner is BUSY (ACCEPTED / PICKED_UP):** mark the order `ASSIGNED`, set
+   `rider.nextOrderId`; the rider does not change state. Leg durations and route are
+   computed and stored on the order now but `legStartedAt` is set when the rider
+   actually starts the next delivery (on completing the current one).
 
 ---
 
@@ -91,7 +94,8 @@ derived from wall-clock time — not a fixed step per tick:
 IDLE  ──assigned──►  ACCEPTED  ──reaches restaurant──►  PICKED_UP  ──reaches customer──►  delivered
   ▲                  (moving to                          (moving to                         │
   │                   restaurant)                         customer)                         │
-  └──────────────────────────── returns to IDLE ◄──────────────────────────────────────────┘
+  │   nextOrderId?                                                                          │
+  └── auto-start ◄── skip IDLE ◄───────────────── returns to IDLE ◄───────────────────────┘
 ```
 
 - **ACCEPTED** → rider animates toward the restaurant (positions updated in-memory
@@ -101,8 +105,10 @@ IDLE  ──assigned──►  ACCEPTED  ──reaches restaurant──►  PICK
 - **PICKED_UP** → rider animates toward the customer. On arrival, the order becomes
   **`DELIVERED`** (with a `deliveredAt` timestamp) and the rider's final position +
   `h3Index` + status are **flushed to MongoDB**.
-- After a short cooldown the rider returns to **`IDLE`**, becomes available again, and
-  can be picked up for the next queued order.
+- **On delivery:** the simulation checks `rider.nextOrderId`. If set, the rider
+  transitions directly back to `ACCEPTED` for the pre-assigned order (no idle
+  pause). `legStartedAt` is set now, leg durations were stored at pre-assignment time.
+  If no `nextOrderId`, the rider returns to **`IDLE`** and is available for the queue.
 
 ---
 
@@ -125,13 +131,54 @@ so two people watching the same map see identical, synchronized state.
 
 ---
 
-## 8. Failure & edge flows
+## 8. Queue behavior and failure flows
 
-- **No rider available** → order waits in the FIFO queue and is assigned the moment a
-  rider frees up. Nothing is dropped.
-- **Rider drops mid-delivery** *(enhancement)* → the order is re-queued and reassigned
-  to another rider; the delivery self-heals.
-- **Order waiting too long** *(enhancement)* → flagged as an SLA breach for operator attention.
+### Phase 1 — Core
+
+**No rider available in geo zone:**
+Order stays `PENDING` in the in-memory FIFO queue. On every tick, the allocation
+engine retries pending orders in order. The moment a rider enters the zone or a
+busy rider's ETAR improves enough to win, the order is assigned. Nothing is dropped.
+
+**In-memory queue structure:**
+```
+pendingQueue: [{ orderId, queuedAt, priority }]
+// sorted: priority DESC, then queuedAt ASC
+// priority 1 = re-queued after rider drop (customer already waiting)
+// priority 0 = new order or normal re-queue
+```
+Rebuilt from `Order.find({ status: 'PENDING' }).sort({ queuedAt: 1 })` on restart.
+All orders restored at priority 0 — runtime priority is not persisted.
+
+**ACCEPTED rider goes OFFLINE:**
+1. Order: `status → PENDING`, `assignedRiderId → null`, `assignedAt → null`, `queuedAt → now`
+2. Rider: `status → OFFLINE`, `currentOrderId → null`, `activeOrders → 0`
+3. Both flushed to MongoDB.
+4. Order re-inserted at **front of queue** at priority 1 — customer was already waiting.
+
+**Pre-assigned rider auto-starts on delivery:**
+When a rider completes a delivery and goes `IDLE`, the simulation immediately
+checks `rider.nextOrderId`. If set:
+- Rider transitions directly to `ACCEPTED` for the next order
+- New leg computed from rider's current position to that order's restaurant
+- `rider.nextOrderId` cleared; `rider.currentOrderId` updated
+- Never actually idles — transition is instant within the same tick.
+
+### Enhancements
+
+- **Stale order backoff** *(enhancement)* — after `MAX_ALLOCATION_RETRIES` (10)
+  consecutive failed ticks, an order is moved to the back of the queue
+  (`queuedAt = now`, priority reset to 0). Prevents a single order in a dead zone
+  from blocking all orders behind it.
+- **Pre-assigned rider (`nextOrderId`) goes OFFLINE** *(enhancement)* — order
+  reset to `PENDING` at normal priority; rider's `nextOrderId` cleared.
+- **Order waiting too long** *(enhancement)* — flagged as an SLA breach for
+  operator attention.
+
+### Out of scope
+
+**`PICKED_UP` rider goes OFFLINE** — not handled. Order remains `ASSIGNED` and
+does not re-queue. Operator intervention required.
 
 ---
 
@@ -139,7 +186,7 @@ so two people watching the same map see identical, synchronized state.
 
 A single trip through the whole system:
 
-1. Seed script loads restaurants, customers, and ~20 idle riders.
+1. Seed script loads restaurants, customers, and 30–35 idle riders.
 2. A client opens the app → the simulation and auto-order job start.
 3. An order is created (auto, single, or bulk) → random restaurant + random customer, status `PENDING`.
 4. On the next tick, the engine runs the H3 geo-filter and computes ETAR for all candidates.

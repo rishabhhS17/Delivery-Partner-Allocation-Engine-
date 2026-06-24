@@ -50,7 +50,6 @@ The system should support:
 - Bulk order creation — admin can create any number of orders at once
 - Automatic order generation — a scheduled job creates an order roughly every
   10 minutes (while clients are connected) so the system is never idle
-- Order reassignment when an assigned rider drops mid-delivery *(enhancement)*
 - Order cancellation *(enhancement)*
 
 ## 5. Allocation & Queue
@@ -68,9 +67,15 @@ The system should support:
 - Deterministic rider selection (reproducible and debuggable)
 - A FIFO pending-order queue that holds orders when no rider is free (graceful backpressure)
 - Automatic assignment of queued orders as riders become available
+- **Pre-assignment** — if a busy rider wins allocation, the order is pre-assigned to
+  them (`rider.nextOrderId`); they auto-start it the moment their current delivery completes
+- **Re-queue on rider drop** — if an `ACCEPTED` rider goes offline, their order is
+  immediately re-queued at high priority (customer was already waiting)
 - Allocation history / audit trail, including the per-factor score breakdown
-- AI-generated allocation explanations, with a deterministic template fallback
-- Reassignment on rider failure — self-healing delivery *(enhancement)*
+- Deterministic template allocation reason — `"${name} selected: ~${km}km away, ~${mins}min ETAR, rated ${rating}/5, ${load} recent deliveries."`
+- AI-generated allocation explanations *(enhancement — Gemini rewrites the template into natural language)*
+- Stale order backoff — orders stuck with no candidates moved to back of queue after N retries *(enhancement)*
+- Re-queue when pre-assigned rider goes offline *(enhancement)*
 - Candidate comparison — why the chosen rider beat the runner-up *(enhancement)*
 - SLA / stale-order flagging for orders that wait too long *(enhancement)*
 
@@ -132,6 +137,7 @@ management; the allocation engine and pending-order queue; allocation history;
 AI explanations; both maps; basic dashboard analytics; configurable weights;
 authentication; real-time updates.
 
-**Enhancements (add value, not required):** reassignment on rider failure, candidate
-comparison, SLA flagging, order cancellation, live weight-tuning sliders, queue-depth
-charting, and the richer map overlays.
+**Enhancements (add value, not required):** candidate comparison, SLA flagging,
+order cancellation, live weight-tuning sliders, queue-depth charting, stale order
+backoff, and the richer map overlays. Note: re-queue on `ACCEPTED` rider drop is
+Phase 1 core (see §5); `PICKED_UP` rider drops are out of scope.
