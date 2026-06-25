@@ -1,0 +1,28 @@
+.emptyCell {
+  border: 0;
+}
+
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-top: var(--space-xs);
+  min-width: 320px;
+}
+
+.activeBadge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.activeBadge[data-active='true'] {
+  color: var(--link);
+  background-color: var(--link-soft);
+}
+
+.activeBadge[data-active='false'] {
+  color: var(--mute);
+  background-color: var(--hairline-soft);
+}

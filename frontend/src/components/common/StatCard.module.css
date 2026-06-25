@@ -1,0 +1,21 @@
+.card {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  height: 100%;
+}
+
+.label {
+  font-size: 14px;
+  color: var(--mute);
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+  font-size: 32px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}

@@ -1,56 +1,60 @@
-import { AppBar, Toolbar, IconButton, Typography, Box, Avatar, TextField, InputAdornment } from '@mui/material';
-
-const drawerWidth = 240;
+import { AppBar, Toolbar, IconButton, Box, Avatar, TextField, InputAdornment, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import styles from './Topbar.module.css';
 
 export default function Topbar({ handleDrawerToggle }) {
+  const { user, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
-    <AppBar
-      position="fixed"
-      elevation={0}
-      sx={{
-        width: { sm: `calc(100% - ${drawerWidth}px)` },
-        ml: { sm: `${drawerWidth}px` },
-        backgroundColor: 'background.paper',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-        height: 64,
-        color: 'text.primary'
-      }}
-    >
-      <Toolbar sx={{ height: 64 }}>
+    <AppBar position="fixed" elevation={0} className={styles.appBar}>
+      <Toolbar className={styles.toolbar}>
         <IconButton
           color="inherit"
           aria-label="open drawer"
           edge="start"
           onClick={() => handleDrawerToggle(true)}
-          sx={{ mr: 2, display: { sm: 'none' } }}
+          className={styles.menuButton}
         >
           ☰
         </IconButton>
-        
-        <Box sx={{ flexGrow: 1 }}>
-          <TextField
-            disabled
+
+        <TextField
+          disabled
+          size="small"
+          placeholder="Search platform..."
+          aria-label="Global platform search"
+          className={styles.searchInput}
+          InputProps={{
+            startAdornment: <InputAdornment position="start">🔍</InputAdornment>,
+          }}
+        />
+
+        <Box className={styles.spacer} />
+
+        <Box className={styles.actions}>
+          <IconButton
+            color="inherit"
+            aria-label="toggle dark mode"
+            onClick={toggleTheme}
             size="small"
-            placeholder="Search platform..."
-            aria-label="Global platform search"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Typography sx={{ fontSize: 16 }}>🔍</Typography>
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: { xs: '100%', sm: 300 } }}
-          />
-        </Box>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="body2" sx={{ cursor: 'pointer' }}>
-            [🔔]
-          </Typography>
-          <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: 14 }}>AD</Avatar>
+          >
+            {isDark ? '☀️' : '🌙'}
+          </IconButton>
+          <Button variant="outlined" size="small" onClick={handleLogout}>
+            Log out
+          </Button>
+          <Avatar className={styles.avatar}>
+            {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AD'}
+          </Avatar>
         </Box>
       </Toolbar>
     </AppBar>

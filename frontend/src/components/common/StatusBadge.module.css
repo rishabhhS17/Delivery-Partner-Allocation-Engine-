@@ -1,0 +1,38 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background-color: var(--hairline-soft);
+  width: fit-content;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: var(--faint);
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.badge[data-color='link'] { background-color: var(--link-soft); }
+.badge[data-color='link'] .dot { background-color: var(--link); }
+
+.badge[data-color='warning'] { background-color: var(--warning-soft); }
+.badge[data-color='warning'] .dot { background-color: var(--warning); }
+
+.badge[data-color='violet'] { background-color: var(--violet-soft); }
+.badge[data-color='violet'] .dot { background-color: var(--violet); }
+
+.badge[data-color='error'] { background-color: var(--error-soft); }
+.badge[data-color='error'] .dot { background-color: var(--error); }
+
+.badge[data-color='faint'] { background-color: var(--hairline-soft); }
+.badge[data-color='faint'] .dot { background-color: var(--faint); }

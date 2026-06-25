@@ -1,49 +1,96 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button } from '@mui/material';
-
-const TABLE_COLUMNS = [
-  'Order ID',
-  'Restaurant',
-  'Customer',
-  'Status',
-  'Assigned Rider',
-  'Created At'
-];
+import { useEffect, useState } from 'react';
+import { Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField } from '@mui/material';
+import PageHeader from '../components/common/PageHeader';
+import StatusBadge from '../components/common/StatusBadge';
+import EmptyState from '../components/common/EmptyState';
+import { getOrders, createOrder, bulkOrders } from '../api/endpoints';
+import styles from './Orders.module.css';
 
 export default function Orders() {
+  const [orders, setOrders] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [bulkCount, setBulkCount] = useState(5);
+
+  const fetchOrders = () => {
+    setStatus('loading');
+    getOrders()
+      .then((res) => {
+        setOrders(res.data ?? []);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
+  };
+
+  useEffect(fetchOrders, []);
+
+  const handleCreate = async () => {
+    await createOrder();
+    fetchOrders();
+  };
+
+  const handleBulkCreate = async () => {
+    await bulkOrders(Number(bulkCount));
+    fetchOrders();
+  };
+
   return (
     <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 1, fontWeight: 300, letterSpacing: '-0.96px' }}>Orders</Typography>
-          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Track pending, active, and completed delivery assignments.
-          </Typography>
-        </Box>
-        <Button variant="contained" disabled sx={{ borderRadius: '9999px', px: 3 }}>
-          Create Order
-        </Button>
-      </Box>
+      <PageHeader
+        eyebrow="Ops — Orders"
+        title="Orders"
+        description="Pending, assigned, and completed delivery assignments."
+        action={
+          <Box className={styles.actions}>
+            <TextField
+              size="small"
+              type="number"
+              value={bulkCount}
+              onChange={(e) => setBulkCount(e.target.value)}
+              className={styles.bulkCount}
+              aria-label="Bulk order count"
+            />
+            <Button variant="outlined" onClick={handleBulkCreate}>Bulk create</Button>
+            <Button variant="contained" onClick={handleCreate}>Create order</Button>
+          </Box>
+        }
+      />
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <Table sx={{ minWidth: 650 }}>
+      <TableContainer component={Paper} elevation={0}>
+        <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'background.default' }}>
-              {TABLE_COLUMNS.map((col) => (
-                <TableCell key={col}>{col}</TableCell>
-              ))}
+            <TableRow>
+              <TableCell>Restaurant</TableCell>
+              <TableCell>Customer</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Assigned rider</TableCell>
+              <TableCell>Created at</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            <TableRow>
-              <TableCell colSpan={TABLE_COLUMNS.length} align="center" sx={{ py: 6, border: 0 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 1 }}>
-                  No orders available.
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Order data will appear after backend integration.
-                </Typography>
-              </TableCell>
-            </TableRow>
+            {status !== 'ready' || orders.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className={styles.emptyCell}>
+                  <EmptyState
+                    title={status === 'error' ? 'Could not load orders' : 'No orders yet'}
+                    description={
+                      status === 'error'
+                        ? 'The backend isn’t reachable yet — this will resolve once it’s live.'
+                        : 'Orders created here will appear once the backend is running.'
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            ) : (
+              orders.map((o) => (
+                <TableRow key={o._id}>
+                  <TableCell>{o.restaurantName}</TableCell>
+                  <TableCell>{o.customerName}</TableCell>
+                  <TableCell><StatusBadge kind="order" status={o.status} /></TableCell>
+                  <TableCell>{o.assignedRiderId ?? '—'}</TableCell>
+                  <TableCell>{o.createdAt ? new Date(o.createdAt).toLocaleString() : '—'}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
