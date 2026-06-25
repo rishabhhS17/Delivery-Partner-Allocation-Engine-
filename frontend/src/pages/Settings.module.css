@@ -1,0 +1,36 @@
+.alert {
+  margin-bottom: var(--space-xl);
+  border-radius: var(--radius-sm);
+}
+
+.sectionTitle {
+  font-weight: 300;
+  margin-bottom: var(--space-md);
+}
+
+.weightGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+
+@media (max-width: 1023px) {
+  .weightGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 599px) {
+  .weightGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.weightLabel {
+  margin-bottom: var(--space-xs);
+  color: var(--body);
+}
+
+.weightValue {
+  font-weight: 300;
+}

@@ -1,0 +1,20 @@
+.alert {
+  margin-bottom: var(--space-xl);
+  border-radius: var(--radius-sm);
+}
+
+.emptyCell {
+  border: 0;
+  padding: var(--space-3xl) 0;
+  text-align: center;
+}
+
+.emptyCellPrimary {
+  font-weight: 500;
+  margin-bottom: var(--space-xxs);
+  color: var(--body);
+}
+
+.emptyCellSecondary {
+  color: var(--mute);
+}

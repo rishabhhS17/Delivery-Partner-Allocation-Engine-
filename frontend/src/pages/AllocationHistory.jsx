@@ -1,30 +1,32 @@
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert } from '@mui/material';
+import PageHeader from '../components/common/PageHeader';
+import styles from './AllocationHistory.module.css';
 
 const TABLE_COLUMNS = [
   'Order ID',
   'Rider Name',
   'Allocation Score',
   'Allocation Reason',
-  'Timestamp'
+  'Timestamp',
 ];
 
 export default function AllocationHistory() {
   return (
     <Box>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 300, letterSpacing: '-0.96px' }}>Allocation History</Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-          Audit log of all rider assignments and scoring decisions.
-        </Typography>
-        <Alert severity="info" sx={{ borderRadius: 2 }}>
-          Rider allocation is performed by the deterministic weighted scoring engine. AI is used exclusively to generate human-readable explanations after an allocation decision is finalized.
-        </Alert>
-      </Box>
+      <PageHeader
+        eyebrow="Ops — Allocations"
+        title="Allocation History"
+        description="Audit log of all rider assignments and scoring decisions."
+      />
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <Table sx={{ minWidth: 650 }}>
+      <Alert severity="info" className={styles.alert}>
+        Rider allocation is performed by the deterministic weighted scoring engine. AI is used exclusively to generate human-readable explanations after an allocation decision is finalized.
+      </Alert>
+
+      <TableContainer component={Paper} elevation={0}>
+        <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'background.default' }}>
+            <TableRow>
               {TABLE_COLUMNS.map((col) => (
                 <TableCell key={col}>{col}</TableCell>
               ))}
@@ -32,11 +34,11 @@ export default function AllocationHistory() {
           </TableHead>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={TABLE_COLUMNS.length} align="center" sx={{ py: 6, border: 0 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 1 }}>
+              <TableCell colSpan={TABLE_COLUMNS.length} className={styles.emptyCell}>
+                <Typography variant="body2" className={styles.emptyCellPrimary}>
                   No allocations available.
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" className={styles.emptyCellSecondary}>
                   Allocation data will appear after backend integration.
                 </Typography>
               </TableCell>
