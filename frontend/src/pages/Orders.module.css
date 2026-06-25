@@ -1,0 +1,12 @@
+.emptyCell {
+  border: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.bulkCount {
+  width: 80px;
+}

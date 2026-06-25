@@ -1,0 +1,56 @@
+.hero {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--gradient-develop-start) 35%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--gradient-preview-end) 30%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at 50% 90%, color-mix(in srgb, var(--gradient-ship-end) 30%, transparent) 0%, transparent 50%),
+    radial-gradient(circle at 85% 85%, color-mix(in srgb, var(--gradient-preview-start) 28%, transparent) 0%, transparent 45%);
+  padding: var(--space-lg);
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  background-color: var(--surface);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.title {
+  color: var(--ink);
+  margin: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--error);
+}
+
+.submit {
+  border-radius: var(--radius-pill) !important;
+  padding: 0px 14px !important;
+  font-size: 16px !important;
+  line-height: 20px !important;
+}

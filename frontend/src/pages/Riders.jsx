@@ -1,53 +1,74 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, ButtonGroup } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import PageHeader from '../components/common/PageHeader';
+import StatusBadge from '../components/common/StatusBadge';
+import EmptyState from '../components/common/EmptyState';
+import { getRiders } from '../api/endpoints';
+import styles from './Riders.module.css';
 
 export default function Riders() {
+  const [riders, setRiders] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+
+  useEffect(() => {
+    getRiders()
+      .then((res) => {
+        setRiders(res.data ?? []);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
+  }, []);
+
   return (
     <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 1, fontWeight: 300, letterSpacing: '-0.96px' }}>Riders</Typography>
-          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Manage delivery partners, view statuses, and track active assignments.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, mt: 1 }}>
-          <ButtonGroup variant="outlined" size="small" disabled>
-            <Button>Available</Button>
-            <Button>Busy</Button>
-            <Button>Offline</Button>
-          </ButtonGroup>
-          <Typography variant="caption" color="text.disabled">
-            Filters unavailable in POC
-          </Typography>
-        </Box>
-      </Box>
+      <PageHeader
+        eyebrow="Ops — Riders"
+        title="Riders"
+        description="Delivery partners, their live status, and current assignment."
+      />
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+      <TableContainer component={Paper} elevation={0}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'background.default' }}>
-              <TableCell>Rider ID</TableCell>
+            <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Phone</TableCell>
               <TableCell>Rating</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Active Orders</TableCell>
-              <TableCell>Latitude</TableCell>
-              <TableCell>Longitude</TableCell>
-              <TableCell>Last Updated</TableCell>
+              <TableCell>Availability</TableCell>
+              <TableCell>Movement</TableCell>
+              <TableCell>Current order</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            <TableRow>
-              <TableCell colSpan={9} align="center" sx={{ py: 6, border: 0 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mb: 1 }}>
-                  No riders available.
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Rider data will appear after backend integration.
-                </Typography>
-              </TableCell>
-            </TableRow>
+            {status !== 'ready' || riders.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className={styles.emptyCell}>
+                  <EmptyState
+                    title={status === 'error' ? 'Could not load riders' : 'No riders yet'}
+                    description={
+                      status === 'error'
+                        ? 'The backend isn’t reachable yet — this will resolve once it’s live.'
+                        : 'Seeded riders will appear here once the backend is running.'
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            ) : (
+              riders.map((r) => (
+                <TableRow key={r._id}>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell>{r.phone}</TableCell>
+                  <TableCell className={styles.rating}>{r.rating}</TableCell>
+                  <TableCell>
+                    <span className={styles.availabilityBadge} data-online={String(r.availabilityStatus === 'ONLINE')}>
+                      {r.availabilityStatus === 'ONLINE' ? 'Online' : 'Offline'}
+                    </span>
+                  </TableCell>
+                  <TableCell><StatusBadge kind="rider" status={r.status} /></TableCell>
+                  <TableCell className={styles.rating}>{r.currentOrderId ?? '—'}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>

@@ -1,0 +1,66 @@
+.wordmark {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.drawerPaper {
+  box-sizing: border-box;
+  width: 240px;
+  border-right: 1px solid var(--hairline);
+  background-color: var(--surface);
+}
+
+.navItem {
+  border-radius: 0;
+  padding: var(--space-xs) var(--space-md);
+  color: var(--body);
+}
+
+.navItem:hover {
+  background-color: var(--hairline-soft);
+}
+
+.navItemActive {
+  background-color: var(--link-soft);
+  color: var(--link);
+  box-shadow: inset 3px 0 0 0 var(--link);
+}
+
+.navLabel {
+  font-size: 14px;
+}
+
+.nav {
+  flex-shrink: 0;
+}
+
+@media (min-width: 600px) {
+  .nav {
+    width: 240px;
+  }
+}
+
+.mobileDrawer {
+  display: block;
+}
+
+@media (min-width: 600px) {
+  .mobileDrawer {
+    display: none;
+  }
+}
+
+.permanentDrawer {
+  display: none;
+}
+
+@media (min-width: 600px) {
+  .permanentDrawer {
+    display: block;
+  }
+}

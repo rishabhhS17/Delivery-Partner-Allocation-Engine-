@@ -1,0 +1,25 @@
+.emptyCell {
+  border: 0;
+}
+
+.rating {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+}
+
+.availabilityBadge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.availabilityBadge[data-online='true'] {
+  color: var(--link);
+  background-color: var(--link-soft);
+}
+
+.availabilityBadge[data-online='false'] {
+  color: var(--mute);
+  background-color: var(--hairline-soft);
+}

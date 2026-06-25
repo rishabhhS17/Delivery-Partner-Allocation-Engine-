@@ -1,0 +1,114 @@
+/*
+  Design tokens mirrored verbatim from DESIGN-vercel.md (colors / rounded / spacing blocks).
+  Single source of truth for theme.js (MUI) and every *.module.css file.
+*/
+:root {
+  /* colors — light mode (default) */
+  --ink: #171717;
+  --body: #4d4d4d;
+  --mute: #8f8f8f;
+  --faint: #a1a1a1;
+  --hairline: #ebebeb;
+  --hairline-soft: #f2f2f2;
+  --canvas: #fafafa;
+  --surface: #ffffff;
+
+  --link: #0070f3;
+  --link-deep: #0761d1;
+  --link-soft: #d3e5ff;
+
+  --warning: #f5a623;
+  --warning-soft: #ffefcf;
+
+  --violet: #7928ca;
+  --violet-soft: #d8ccf1;
+
+  --error: #ee0000;
+  --error-deep: #c50000;
+  --error-soft: #fde2e2;
+
+  /* mesh gradient stops — Login hero only */
+  --gradient-develop-start: #007cf0;
+  --gradient-develop-end: #00dfd8;
+  --gradient-preview-start: #7928ca;
+  --gradient-preview-end: #ff0080;
+  --gradient-ship-start: #ff4d4d;
+  --gradient-ship-end: #f9cb28;
+
+  /* rounded */
+  --radius-none: 0px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  /* spacing */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 40px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+  --space-section: 128px;
+
+  /* typography */
+  --font-sans: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6edf3;
+    --body: #8b949e;
+    --mute: #6e7681;
+    --faint: #484f58;
+    --hairline: #30363d;
+    --hairline-soft: #21262d;
+    --canvas: #0d1117;
+    --surface: #161b22;
+
+    --link: #58a6ff;
+    --link-deep: #79c0ff;
+    --link-soft: #1a3a66;
+
+    --warning: #f5a623;
+    --warning-soft: #3d2a15;
+
+    --violet: #b78dff;
+    --violet-soft: #3d2666;
+
+    --error: #ff4444;
+    --error-deep: #ff2222;
+    --error-soft: #662222;
+  }
+}
+
+/* Manual dark mode toggle (via JavaScript data attribute) */
+html[data-theme="dark"] {
+  --ink: #e6edf3;
+  --body: #8b949e;
+  --mute: #6e7681;
+  --faint: #484f58;
+  --hairline: #30363d;
+  --hairline-soft: #21262d;
+  --canvas: #0d1117;
+  --surface: #161b22;
+
+  --link: #58a6ff;
+  --link-deep: #79c0ff;
+  --link-soft: #1a3a66;
+
+  --warning: #f5a623;
+  --warning-soft: #3d2a15;
+
+  --violet: #b78dff;
+  --violet-soft: #3d2666;
+
+  --error: #ff4444;
+  --error-deep: #ff2222;
+  --error-soft: #662222;
+}
