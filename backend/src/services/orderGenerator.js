@@ -1,5 +1,5 @@
 import { latLngToCell, gridDisk } from 'h3-js';
-import { H3_RESOLUTION, H3_SERVICE_AREA_K } from '../config/constants.js';
+import { H3_RESOLUTION, H3_SERVICE_AREA_K, AUTO_ORDER_INTERVAL_MS } from '../config/constants.js';
 import Restaurant from '../models/Restaurant.js';
 import Customer from '../models/Customer.js';
 import Order from '../models/Order.js';
@@ -50,4 +50,19 @@ export async function bulkCreateOrders(count) {
     }
   }
   return created;
+}
+
+let autoOrderTimer = null;
+
+export function startAutoOrderJob() {
+  if (autoOrderTimer) return;
+  autoOrderTimer = setInterval(() => {
+    createOrder().catch(() => {});
+  }, AUTO_ORDER_INTERVAL_MS);
+}
+
+export function stopAutoOrderJob() {
+  if (!autoOrderTimer) return;
+  clearInterval(autoOrderTimer);
+  autoOrderTimer = null;
 }

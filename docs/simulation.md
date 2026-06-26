@@ -1,185 +1,213 @@
 
-# Phase-1
+# Simulation Engine — Architecture & Phased Roadmap
 
-Here is the detailed, file-by-file blueprint for implementing your basic model (straight-line, fixed 40 km/h speed).  
-By structuring your project exactly like this, you ensure that no code is wasted. When you are ready to transition to real road paths and traffic later, you will only need to modify one or two files instead of rewriting the whole system.
-
-### **1\. Project Folder Structure**
-
-First, organize your backend to separate database logic from the fast-paced simulation logic:
-
-* src/models.js (Database definitions)  
-* src/allocationEngine.js (The matchmaker)  
-* src/simulation/activeTripsStore.js (In-memory RAM storage)  
-* src/simulation/simulationEngine.js (The continuous heartbeat)  
-* src/server.js (The API and WebSocket setup)
-
-### **2\. File-by-File Implementation Plan**
-
-#### **File A: src/models.js**
-
-**Purpose:** Defines your MongoDB structures.
-
-* **What to implement here:** \* Create the Mongoose schemas exactly as defined in your spec.  
-  * **Rider Schema:** Needs fields for current latitude, longitude, availabilityStatus (ONLINE/OFFLINE), and status (IDLE, ACCEPTED, PICKED\_UP).  
-  * **Order Schema:** Needs restaurantLat/Lng, customerLat/Lng, status (PENDING, ASSIGNED, PICKED\_UP, DELIVERED), and a progress tracker.  
-  * *Transition Note:* This file will **not change at all** when you upgrade to advanced routing later.
-
-#### **File B: src/simulation/activeTripsStore.js**
-
-**Purpose:** Protects your database. If you write coordinates to MongoDB every 2 seconds, your database will crash. This file acts as a temporary "scratchpad" in your server's RAM.
-
-* **What to implement here:**  
-  * Create a simple JavaScript Map (dictionary).  
-  * Write a function to **Add a Trip** (triggered when an order is assigned).  
-  * Write a function to **Remove a Trip** (triggered when an order is delivered).  
-  * Write a function to **Get All Active Trips** (used by the heartbeat to know who to move).
-
-#### **File C: src/allocationEngine.js**
-
-**Purpose:** Matches the rider and injects them into the simulation.
-
-* **What to implement here:**  
-  * Write logic that finds the best IDLE rider for a PENDING order (using your ETAR and H3 logic).  
-  * Once a rider is chosen, update the database: Rider is ACCEPTED, Order is ASSIGNED.  
-  * **The Crucial Setup Step:** Calculate the total straight-line distance (using a Haversine formula library like Turf.js) for **Leg 1** (Rider to Restaurant) and **Leg 2** (Restaurant to Customer).  
-  * Inject a "Trip Object" into activeTripsStore.js. This object must contain: The Rider ID, Order ID, current coordinates, the total distance of Leg 1, and the total distance of Leg 2\.
-
-#### **File D: src/simulation/simulationEngine.js**
-
-**Purpose:** The engine room. This is where the fixed 40 km/h math happens.
-
-* **What to implement here:**  
-  * Set up a setInterval timer that triggers every **2 seconds** (The Heartbeat).  
-  * Inside the heartbeat, fetch all active trips from the activeTripsStore.  
-  * **The Math:** For every active trip, define a fixed distance budget of **22.22 meters** (which equals 40 km/h over 2 seconds).  
-  * **The Movement:** Check how many meters the rider has traveled on their current Leg. Add 22.22 meters to it.  
-  * **The Interpolation:** Use a "Lerp" (Linear Interpolation) math function. If a leg is 1000 meters total, and the rider has traveled 500 meters, the math puts their new GPS coordinate exactly at the 50% mark on the straight line between the start and end points. Update the trip object in memory with this new coordinate.  
-  * **The Snapping Logic:** If the remaining distance on a leg is less than 22.22 meters, force the rider's coordinate to the destination. If it's the restaurant, switch them to Leg 2 and update MongoDB to PICKED\_UP. If it's the customer, update MongoDB to DELIVERED and remove the trip from memory.  
-  * **The Broadcast:** At the very end of the 2-second heartbeat, gather all the freshly calculated coordinates and use socket.io to emit one single array to the frontend.
-
-#### **File E: src/server.js**
-
-**Purpose:** The front door of your application.
-
-* **What to implement here:**  
-  * Initialize your Express server and your Socket.IO server.  
-  * Connect to MongoDB.  
-  * Call the function to start the heartbeat from simulationEngine.js.  
-  * Set up the REST API endpoints outlined in your merged.md file (e.g., POST /orders, POST /allocate-order, GET /riders, etc.). When POST /allocate-order is hit, it simply calls the function in allocationEngine.js.
-
-### **How the Flow Works in Action (The Mental Model)**
-
-1. **Trigger:** An admin hits the POST /orders endpoint on server.js.  
-2. **Match:** allocationEngine.js finds a rider. It calculates the straight-line distance to the restaurant (e.g., 800 meters).  
-3. **Store:** It saves a new trip into activeTripsStore.js with 0 meters traveled.  
-4. **Tick 1:** The 2-second heartbeat in simulationEngine.js ticks. It sees the new trip. It moves the rider 22.22 meters along the straight line. It broadcasts the new GPS point via WebSocket.  
-5. **Tick N:** The heartbeat continues every 2 seconds until the accumulated distance reaches 800 meters. The engine snaps the rider to the restaurant, updates the database to PICKED\_UP, and loads the distance for the Customer drop-off.
-
-### **Why this guarantees a smooth transition later:**
-
-When you want to add Real Roads and Traffic, **Files A, B, C, and E do not change**.  
-You will only open File D (simulationEngine.js), change the distance budget to check H3 traffic zones, and change the straight-line Lerp math to loop over a Mapbox road array instead. Everything else remains perfectly intact\!
+This document is the authoritative reference for the simulation engine design. It covers the in-memory data model, the tick loop, and the three movement phases. Each phase is additive — later phases only modify `simulationEngine.js` and `routingService.js`. Everything else stays identical.
 
 ---
 
-# Phase-2
+## Actual Backend File Structure
 
-Here is the detailed implementation blueprint for **Phase 2: The "Street-Snapped" Fleet**.  
-In Phase 1, your simulation loop (simulation.js) moved the rider in a straight line between two points. In Phase 2, you will integrate the **Mapbox Directions API** to snap that movement to actual road networks.  
-Here is exactly how to implement this transition and where to apply the changes in your architecture.
-
-
-
-
-### **The Core Concept Shift: From "Line" to "Array"**
-
-Instead of calculating a single straight line from the Rider to the Restaurant, your backend will now fetch a **Polyline** from Mapbox. A Polyline is simply a "connect-the-dots" array of hundreds of tiny GPS coordinates that follow the curves of the streets.  
-Your 2-second heartbeat loop will still consume a distance budget (e.g., 22.22 meters for 40 km/h), but it will consume it by hopping from dot to dot along this array.
-
-### **Step-by-Step Implementation Plan**
-
-#### **1\. Setup & Environment**
-
-* **Action:** Create an account on Mapbox, generate an API key (access token), and add it to your backend .env file as MAPBOX\_TOKEN.  
-* **Dependencies:** Install axios on your Node.js backend to make HTTP requests to the Mapbox API, and @turf/turf (if not already installed) to easily calculate distances between the small road segments.
-
-#### **2\. Create the Routing Service (New File)**
-
-* **Where:** Create a new file, e.g., src/routingService.js.  
-* **What to implement:** Create a function getRoadRoute(startCoords, endCoords).  
-* **The Logic:**  
-  * This function makes a GET request to the Mapbox Directions API using the driving profile.  
-  * Mapbox will return a GeoJSON array of coordinates representing the road path.  
-  * Calculate and store the distance between each consecutive node in this array.  
-  * **Return:** The array of GPS nodes and the pre-calculated segment distances.
-
-#### **3\. Update the Allocation Engine**
-
-* **Where:** src/allocationEngine.js (where the rider is matched and the order is ASSIGNED).  
-* **What to implement:** \* Right after your engine selects the winning rider based on ETAR, call your new getRoadRoute() function **twice**:  
-  1\. **Leg 1:** Rider's current location $\\rightarrow$ Restaurant location.  
-  2\. **Leg 2:** Restaurant location $\\rightarrow$ Customer location.  
-  * Save these detailed road arrays into your in-memory activeTripsStore so the simulation loop can access them.
-
-#### **4\. Upgrade the Simulation Heartbeat (The Toughest Part)**
-
-* **Where:** src/simulation.js (the 2-second interval loop).  
-* **What to implement:** You must upgrade the movement math. It is no longer a simple A-to-B interpolation.  
-* **The Logic (Array Traversal):**  
-  * For each active trip, maintain a currentSegmentIndex (which pair of dots the rider is currently driving between) and distanceTraveledOnSegment.  
-  * Every 2 seconds, grant the rider their 22.22-meter budget.  
-  * **Check the segment:** If the distance to the next dot in the array is *greater* than 22.22m, slide the rider forward on that segment.  
-  * **The "Carry-Over" logic (Crucial):** If the next dot is only 5 meters away, the rider reaches the turn\! Move the rider to that dot, subtract 5m from the budget (17.22m remaining), increment the currentSegmentIndex by 1 to turn the corner, and apply the remaining 17.22m down the *next* street segment.  
-  * Once the index reaches the end of the Leg 1 array, update MongoDB to PICKED\_UP and switch to the Leg 2 array.  
-  * Broadcast the exact road-snapped coordinate via Socket.IO.
-
-#### **5\. Upgrade the Frontend Maps (React)**
-
-* **Where:** Your React components for the **Rider Map** and **Order Map**.  
-* **What to implement:** \* **The Route Line:** In Phase 1, you drew a straight line. Now, when an order is opened, your frontend should also call the Mapbox API (or receive the array from your backend) to draw a \<Layer type="line"\> that explicitly follows the road curves.  
-  * **The Marker:** You actually don't need to change the marker animation logic\! Because your backend is streaming perfectly road-snapped coordinates every 2 seconds, the React marker will naturally glide along the curves of the drawn street line.
-
-### **Why this approach is safe**
-
-By isolating the Mapbox API call to routingService.js and storing the arrays in RAM, you avoid hitting the Mapbox API on every single tick of the simulation. You only hit the API **once** when the order is assigned. The heartbeat loop then processes that stored data locally, keeping your backend fast, deterministic, and well within Mapbox's free tier limits.
+```
+backend/src/
+├── config/
+│   └── constants.js          RIDER_SPEED_KMH, H3_RESOLUTION, H3_CANDIDATE_K,
+│                             LOAD_WINDOW_MINUTES, AUTO_ORDER_INTERVAL_MS, TICK_INTERVAL_MS
+├── models/
+│   ├── Rider.js              latitude, longitude, h3Index, status, availabilityStatus,
+│   │                         currentOrderId, nextOrderId, rating, deliveryTimestamps
+│   └── Order.js              restaurantLat/Lng, customerLat/Lng, status, legStartedAt,
+│                             leg1Duration_s, leg2Duration_s,
+│                             leg1Coords [[lng,lat]...], leg2Coords [[lng,lat]...]
+│                             (leg1Coords/leg2Coords are empty in Phase 1, filled in Phase 2+)
+├── services/
+│   ├── allocationEngine.js   PURE FUNCTION — takes (order, candidates[], weights), returns winner
+│   │                         No DB I/O. Contains diskCache (Map<h3Cell → 19 cells>).
+│   ├── simulationEngine.js   Tick loop + in-memory state (see below)
+│   ├── orderGenerator.js     startAutoOrderJob() / stopAutoOrderJob() — B7
+│   └── routingService.js     getRoute(from, to[], profile) → {leg1Coords, leg2Coords,
+│                             leg1Duration_s, leg2Duration_s}  (Phase 2+, created then)
+├── routes/
+│   ├── index.js              mounts all route files
+│   ├── allocation.js         POST /allocation/allocate, GET /allocation/history
+│   ├── config.js             GET/PUT /config/weights
+│   └── simulation.js         POST /simulation/start, POST /simulation/stop (B9)
+└── server.js                 Express + socket.io + MongoDB + initSimulation()
+```
 
 ---
 
-# Phase-3
+## In-Memory State (simulationEngine.js module level)
 
-### **Core Concept Shift**
+```js
+// Rider positions and status — source of truth between DB writes
+const riderState = new Map();
+// riderId → { lat, lng, status, availabilityStatus, currentOrderId, nextOrderId }
 
-Instead of a fixed 22.22-meter budget per tick, your 2-second loop looks up the live speed of the road segment the rider is currently on:
+// H3 geo-index — rebuilt from riderState, updated when riders move cells
+const h3Buckets = new Map();
+// h3Cell → Set<riderId>
 
-$$\\text{Distance Budget for Tick} \= \\text{Mapbox Segment Speed (m/s)} \\times 2\\text{ seconds}$$  
-Riders naturally slow down to a crawl on congested roads and speed up on highways.
+// Orders waiting for a rider
+const pendingQueue = [];
+// Order documents (PENDING status)
+```
 
-### **Exact Files to Modify & What to Implement**
+These three Maps are the only in-memory state. No separate `activeTripsStore.js` file is needed.
 
-#### **1\. src/routingService.js (Backend)**
+---
 
-* **Change:** Modify the Mapbox API HTTP request.  
-* **Implementation:** Change the URL routing profile to driving-traffic and add the parameter annotations=speed,congestion.  
-* **Result:** The API will now return the coordinate path array *plus* a parallel array containing the exact real-time speed (in meters per second) for every single block.
+## Hydration on Server Restart
 
-#### **2\. src/simulation/activeTripsStore.js (Backend)**
+`initSimulation()` is called once on server boot. It re-hydrates all three Maps from MongoDB so the simulation resumes exactly where it left off:
 
-* **Change:** Update your temporary RAM cache schema.  
-* **Implementation:** Expand the active trip memory object to include a new field: segmentSpeeds array.  
-* **Result:** This stores the dynamic traffic speed data fetched by your routing service so the loop can access it instantly.
+```
+initSimulation():
+  1. Rider.find({}) → build riderState Map + h3Buckets Map
+  2. Order.find({ status: 'PENDING' }) → fill pendingQueue
+  3. For ACCEPTED/PICKED_UP riders: their currentOrderId has legStartedAt + leg1/2Duration_s
+     stored in DB — the tick loop uses these to recompute progress on the first tick
+  4. Start setInterval(tick, TICK_INTERVAL_MS)
+```
 
-#### **3\. src/simulation/simulationEngine.js (Backend Heartbeat Loop)**
+DB writes only happen on **state transitions** (IDLE→ACCEPTED, ACCEPTED→PICKED_UP, PICKED_UP→IDLE), not every tick. This keeps write volume at ~3 writes per delivery regardless of tick rate.
 
-* **Change:** Replace the hardcoded 22.22m speed with dynamic math.  
-* **Implementation:** 1\. Look up the rider's currentSegmentIndex.  
-  2\. Pull the live speed for that index from the stored segmentSpeeds array.  
-  3\. Calculate the tick's budget: speed \* 2\.  
-  4\. Move the rider along the path nodes using this dynamic budget.  
-  5\. **Fallback Safety:** If Mapbox returns a traffic speed of 0 m/s (gridlock), force a fallback minimum speed of 3 m/s (\~10 km/h) so the rider never freezes on screen permanently.
+---
 
-#### **4\. Your Frontend Map File (React UI)**
+## Tick Loop (every TICK_INTERVAL_MS = 1000ms)
 
-* **Change:** Update the route rendering style.  
-* **Implementation:** Receive the traffic metadata along with the coordinates. Use Mapbox Map layer data expressions (line-color) to automatically style the road path segments: **Green** for optimal speed, **Yellow** for moderate slowdowns, and **Red** for heavy traffic.  
-* **Result:** The user sees a multi-colored route line, and the rider marker naturally slows down visually whenever it crosses a red section.
+```
+tick():
+  1. For each ACCEPTED/PICKED_UP rider in riderState:
+     a. Compute progress = (now - legStartedAt) / leg_duration_s
+     b. If progress >= 1: leg complete → handle transition (see below)
+     c. Else: interpolate new lat/lng (Phase 1: lerp; Phase 2+: walk polyline)
+     d. Update riderState lat/lng
+     e. If rider crossed an H3 cell boundary: update h3Buckets
+
+  2. Leg-complete transitions:
+     - ACCEPTED → restaurant reached:
+         rider.status = PICKED_UP
+         order.status = PICKED_UP
+         order.legStartedAt = now
+         Rider.lat/lng = restaurant lat/lng (exact snap)
+         Write Rider + Order to DB
+         emit order:status { orderId, status: 'PICKED_UP' }
+     - PICKED_UP → customer reached:
+         order.status = DELIVERED
+         rider.status = IDLE
+         rider.currentOrderId = null
+         If rider.nextOrderId: immediately start that order (ACCEPTED)
+         Rider.lat/lng = customer lat/lng (exact snap)
+         Write Rider + Order to DB
+         emit order:delivered { orderId, riderId }
+         rider.deliveryTimestamps.push(now) — write to DB
+
+  3. Drain pendingQueue:
+     For each PENDING order, call getCandidateCells() → query h3Buckets for ONLINE/IDLE riders
+     → allocateOrder() → if winner found:
+         Assign order (write DB), move to riderState as ACCEPTED
+         Remove from pendingQueue
+         emit order:assigned { orderId, riderId, score, breakdown }
+
+  4. Emit simulation:tick { riders: [...riderState values], queueDepth: pendingQueue.length }
+```
+
+---
+
+# Phase 1 — Straight-Line Lerp (Current)
+
+Movement math inside the tick loop:
+
+```
+lat = lerp(startLat, endLat, progress)
+lng = lerp(startLng, endLng, progress)
+```
+
+Where:
+- `startLat/Lng` = leg start coordinates (stored in Order or rider position at ACCEPTED time)
+- `endLat/Lng` = restaurant coords (leg 1) or customer coords (leg 2)
+- `progress` = elapsed_ms / (leg_duration_s * 1000)
+- `leg_duration_s` = haversine_distance_km / RIDER_SPEED_KMH * 3600
+
+**No Mapbox API calls. Zero external cost.**
+
+Transition note: `leg1Coords` and `leg2Coords` on Order are empty arrays in Phase 1. The tick loop checks: if coords array is empty → use lerp fallback. This fallback remains in Phase 2+ as a safety net.
+
+---
+
+# Phase 2 — Road-Snapped Movement
+
+### What changes
+
+1. **`routingService.js`** (new file, `backend/src/services/`)
+   - `getRoute(riderCoords, restaurantCoords, customerCoords)` — ONE Directions API call with 3 waypoints
+   - Profile: `mapbox/driving`
+   - Response: two legs → split into `leg1Coords [[lng,lat]...]` and `leg2Coords [[lng,lat]...]`
+   - Also extracts `leg1Duration_s` and `leg2Duration_s` from Mapbox's `duration` field (replaces Haversine estimate)
+
+2. **`allocation.js` route handler** (modify `POST /allocation/allocate`)
+   - After winner selected: call `getRoute()` asynchronously
+   - Write `leg1Coords`, `leg2Coords`, `leg1Duration_s`, `leg2Duration_s` to Order in MongoDB
+   - These fields persist across server restarts — no re-querying needed on boot
+
+3. **`simulationEngine.js` tick** (modify movement math)
+   - Replace lerp with polyline traversal:
+     - Maintain `currentSegmentIdx` and `distanceOnSegment` per active trip (in riderState)
+     - Budget per tick: `RIDER_SPEED_KMH / 3.6 * (TICK_INTERVAL_MS / 1000)` meters
+     - Carry-over logic: if next node is closer than budget, consume it, carry remainder to next segment
+   - Lerp fallback remains for any order with empty coords (backward compatibility)
+
+### Cost model
+
+One Directions API call per order allocation. At 100 orders/day: ~3,000 calls/month. Mapbox free tier: 100,000/month. Well within limits.
+
+Polylines are stored in MongoDB → zero re-querying on server restart.
+
+---
+
+# Phase 3 — Traffic-Aware Movement
+
+### What changes (only two files)
+
+1. **`routingService.js`**
+   - Change profile: `mapbox/driving` → `mapbox/driving-traffic`
+   - Add query param: `annotations=speed,congestion`
+   - Each leg now returns a `segmentSpeeds: [m/s per segment]` array alongside coords
+   - Store `segmentSpeeds` in riderState (RAM only — recalculated on re-poll)
+
+2. **`simulationEngine.js`**
+   - Dynamic budget per tick: `segmentSpeeds[currentSegmentIdx] * (TICK_INTERVAL_MS / 1000)` meters
+   - Fallback: if speed is 0 (gridlock), use minimum 3 m/s (~10 km/h) so riders never freeze
+   - Add traffic re-poll job (runs alongside tick loop, every 3 minutes):
+     - For all orders currently ACCEPTED or PICKED_UP: call `getRoute()` again
+     - Update `leg1Coords`/`leg2Coords` and `leg1Duration_s`/`leg2Duration_s` in DB + riderState
+     - This reflects real-world traffic changes mid-delivery
+
+### Cost model (re-poll job)
+
+With 5 active orders at any time, polling every 3 min:
+`5 orders × (60/3) polls/hour × 24h × 30 days = 72,000 calls/month`
+
+Still within the 100,000/month free tier. If order volume grows, increase poll interval to 5 min.
+
+### Frontend (Phase 3 upgrade)
+
+The `simulation:tick` payload doesn't change — riders still send `lat/lng`. The only frontend change is route line coloring:
+
+- Receive `congestion` metadata per segment (via a new `order:routeUpdate` event or initial `order:assigned` payload)
+- Use Mapbox `line-color` data expression to color route segments: green → yellow → red based on congestion level
+- Rider marker slows down naturally as backend applies lower speed budget on congested segments
+
+---
+
+## Transition Summary
+
+| File | Phase 1 | Phase 2 | Phase 3 |
+|------|---------|---------|---------|
+| `simulationEngine.js` | lerp math | polyline walk | dynamic speed budget + re-poll job |
+| `routingService.js` | does not exist | getRoute() with driving | switch to driving-traffic + annotations |
+| `Order.js` | leg1/2Coords empty | filled from Directions | same, plus segmentSpeeds in RAM |
+| `allocationEngine.js` | unchanged | unchanged | unchanged |
+| `allocation.js` (route) | no route call | calls getRoute() | unchanged |
+| Frontend | GeoJSON circles | GeoJSON circles + route line | + congestion coloring |
+| Mapbox API calls | 0 | 1 per order | 1 per order + 1 per active order per 3 min |

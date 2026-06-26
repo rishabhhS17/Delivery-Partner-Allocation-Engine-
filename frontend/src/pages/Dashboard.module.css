@@ -42,3 +42,48 @@
   color: var(--mute);
   margin-bottom: var(--space-md);
 }
+
+.miniMapWrap {
+  width: 100%;
+  height: 240px;
+}
+
+.allocationFeed {
+  display: flex;
+  flex-direction: column;
+}
+
+.allocationItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.allocationItem:last-child {
+  border-bottom: none;
+}
+
+.allocationRight {
+  text-align: right;
+}
+
+.allocationRider {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.allocationMeta {
+  font-size: 11px;
+  color: var(--mute);
+  margin-top: 2px;
+}
+
+.allocationScore {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--link);
+  font-weight: 500;
+}

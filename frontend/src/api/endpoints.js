@@ -133,7 +133,8 @@ const MOCK_ANALYTICS = {
 // Riders
 export const getRiders = async () => {
   try {
-    return await api.get('/riders');
+    const res = await api.get('/riders');
+    return { data: res.data?.data ?? res.data };
   } catch (error) {
     if (import.meta.env.DEV) {
       return { data: MOCK_RIDERS };
@@ -160,7 +161,8 @@ export const updateStatus = (id, body) => api.put(`/riders/${id}/status`, body);
 // Restaurants
 export const getRestaurants = async () => {
   try {
-    return await api.get('/restaurants');
+    const res = await api.get('/restaurants');
+    return { data: res.data?.data ?? res.data };
   } catch (error) {
     if (import.meta.env.DEV) {
       return { data: MOCK_RESTAURANTS };
@@ -200,7 +202,8 @@ export const deleteRestaurant = async (id) => {
 // Customers
 export const getCustomers = async () => {
   try {
-    return await api.get('/customers');
+    const res = await api.get('/customers');
+    return { data: res.data?.data ?? res.data };
   } catch (error) {
     if (import.meta.env.DEV) {
       return { data: MOCK_CUSTOMERS };
@@ -240,7 +243,8 @@ export const deleteCustomer = async (id) => {
 // Orders
 export const getOrders = async (params) => {
   try {
-    return await api.get('/orders', { params });
+    const res = await api.get('/orders', { params });
+    return { data: res.data?.data ?? res.data };
   } catch (error) {
     if (import.meta.env.DEV) {
       return { data: MOCK_ORDERS };
@@ -308,13 +312,13 @@ export const bulkOrders = async (count) => {
 export const acceptOrder = (id) => api.put(`/orders/${id}/accept`);
 
 // Allocation
-export const allocateOrder = (orderId) => api.post('/allocate-order', { orderId });
-export const getAllocationHistory = async () => {
+export const allocateOrder = (orderId) => api.post('/allocation/allocate', { orderId });
+export const getAllocationHistory = async (params) => {
   try {
-    return await api.get('/allocation-history');
+    return await api.get('/allocation/history', { params });
   } catch (error) {
     if (import.meta.env.DEV) {
-      return { data: [] };
+      return { data: { total: 0, page: 1, limit: 20, records: [] } };
     }
     throw error;
   }
@@ -337,7 +341,7 @@ export const setWeights = (body) => api.put('/config/weights', body);
 // Analytics
 export const getAnalytics = async () => {
   try {
-    return await api.get('/analytics');
+    return await api.get('/analytics'); // returns flat { totalRiders, availableRiders, ... }
   } catch (error) {
     if (import.meta.env.DEV) {
       return { data: MOCK_ANALYTICS };

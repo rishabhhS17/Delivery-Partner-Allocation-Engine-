@@ -186,7 +186,7 @@ Express setup → middleware (cors, json) → route mounting → Socket.IO attac
 → io.on('disconnect') → stop sim if last client
 ```
 
-Auth: JWT middleware. Two roles: `admin`, `partner`. Routes that need auth check the token.
+Auth: Google OAuth 2.0 → JWT session. Two roles: `admin`, `partner`. Routes that need auth check the token via `protect` middleware. Implemented in B10 (after simulation engine is complete).
 
 **WS events emitted:**
 - `simulation:tick` — `{ riders: [...], queueDepth: n }`
@@ -221,8 +221,8 @@ Base URL from env: `REACT_APP_API_URL`.
 ### Page 1 — Login
 
 **Route:** `/login`  
-**API:** `POST /auth/login`  
-**What it does:** email + password form → JWT stored in `localStorage` → redirect to Dashboard
+**API:** `GET /api/auth/google` (OAuth redirect)  
+**What it does:** "Sign in with Google" button → Google OAuth 2.0 consent → callback issues JWT → stored in `localStorage` → redirect to Dashboard
 
 ---
 
