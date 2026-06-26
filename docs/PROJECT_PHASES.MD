@@ -81,7 +81,7 @@ Single exported function: `allocateOrder(order, h3Buckets, riderState, weights)`
 **Steps:**
 1. `restaurantHex = h3.latLngToCell(order.restaurantLat, order.restaurantLng, 7)`
 2. `candidateZone = new Set(h3.gridDisk(restaurantHex, 2))`
-3. Union all cells in `candidateZone` from `h3Buckets` → rider IDs. Filter: `rider.availabilityStatus === 'ONLINE'`
+3. Union all cells in `candidateZone` from `h3Buckets` → rider IDs. Filter: `rider.availabilityStatus === 'ONLINE'` **AND** `rider.nextOrderId == null`
 4. For each candidate, compute ETAR:
    - `IDLE`: `haversine(rider, restaurant) / 40 * 3600`
    - `PICKED_UP`: `(1 - progress) * order.leg2Duration_s + haversine(rider, restaurant) / 40 * 3600`
@@ -126,10 +126,13 @@ const pendingQueue = []         // [{ orderId, queuedAt, priority }] — sorted 
 **`stopSimulation()`** — clears interval; called when last WS client disconnects
 
 **`tick()` — runs every `TICK_INTERVAL_MS`:**
-1. **Process queue**: pop oldest pending order (FIFO, respect priority). Call `allocateOrder`. If winner found:
-   - If winner is `IDLE`: assign now (update riderState, h3Buckets, flush to MongoDB, write AllocationHistory)
-   - If winner is `ACCEPTED`/`PICKED_UP`: pre-assign (`rider.nextOrderId = order._id`; flush `nextOrderId` + order `ASSIGNED` to MongoDB)
-   - If no winner: push back to queue unchanged
+1. **Process queue**: sweep **all** orders in `pendingQueue` in insertion order. For each:
+   - Call `allocateOrder(order, h3Buckets, riderState, weights)`
+   - If winner found:
+     - If winner is `IDLE`: assign now (update riderState, h3Buckets, flush to MongoDB, write AllocationHistory); remove from queue
+     - If winner is `ACCEPTED`/`PICKED_UP`: pre-assign (`rider.nextOrderId = order._id`; flush `nextOrderId` + order `ASSIGNED` to MongoDB); remove from queue
+   - If no winner: leave in queue, retried next tick
+   - **In-tick double-assignment guard**: once a rider is assigned within this sweep, their updated state in `riderState` makes them ineligible (`nextOrderId` set or `status` changed) for subsequent orders in the same sweep — no extra tracking needed
 2. **Move riders**: for each rider in `ACCEPTED`/`PICKED_UP`:
    - Compute `progress = min(1.0, (Date.now() - order.legStartedAt) / (legDuration_ms))`
    - Interpolate position along `order.polyline`
@@ -183,7 +186,7 @@ Express setup → middleware (cors, json) → route mounting → Socket.IO attac
 → io.on('disconnect') → stop sim if last client
 ```
 
-Auth: JWT middleware. Two roles: `admin`, `partner`. Routes that need auth check the token.
+Auth: Google OAuth 2.0 → JWT session. Two roles: `admin`, `partner`. Routes that need auth check the token via `protect` middleware. Implemented in B10 (after simulation engine is complete).
 
 **WS events emitted:**
 - `simulation:tick` — `{ riders: [...], queueDepth: n }`
@@ -218,8 +221,8 @@ Base URL from env: `REACT_APP_API_URL`.
 ### Page 1 — Login
 
 **Route:** `/login`  
-**API:** `POST /auth/login`  
-**What it does:** email + password form → JWT stored in `localStorage` → redirect to Dashboard
+**API:** `GET /api/auth/google` (OAuth redirect)  
+**What it does:** "Sign in with Google" button → Google OAuth 2.0 consent → callback issues JWT → stored in `localStorage` → redirect to Dashboard
 
 ---
 
@@ -331,6 +334,7 @@ Each is independent — pick in any order. Traffic-adaptive speed is the final o
 | Enhancement | Where | Notes |
 |---|---|---|
 | **Weight-tuning sliders** | Rider Map sidebar | `PUT /config/weights`; watch allocations change live. Highest value — pull forward if time allows |
+| **Event-driven queue drain (`tryDrainQueue`)** | simulation.js | Replace the per-tick full-queue sweep with an event-driven drain: when a rider transitions to `IDLE`, immediately scan `pendingQueue` for orders whose `restaurantH3` falls within that rider's k=2 zone and attempt allocation. Zero wasted allocation cycles between state changes. |
 | **Re-queue visibility** | Rider Map | Flash an order back to pending when an ACCEPTED rider drops; show the re-assigned rider picking it up. Logic is Phase 1 core; this is the UI visibility |
 | **SLA / stale-order flagging** | Rider Map + Dashboard | Highlight orders waiting > threshold in red |
 | **Candidate comparison** | Order Map or Allocation History | Show runner-up score vs winner |

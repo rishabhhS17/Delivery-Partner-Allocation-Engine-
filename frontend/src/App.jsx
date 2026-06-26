@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import createAppTheme from './theme/theme';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { SimulationProvider } from './context/SimulationContext';
 import AppRoutes from './routes/AppRoutes';
 
 function AppContent() {
@@ -15,7 +16,9 @@ function AppContent() {
       <CssBaseline />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <SimulationProvider>
+            <AppRoutes />
+          </SimulationProvider>
         </AuthProvider>
       </BrowserRouter>
     </MuiThemeProvider>

@@ -1,0 +1,96 @@
+{
+  "request": {
+    "url": "http://localhost:5000/api/riders",
+    "header": [
+      {
+        "key": "User-Agent",
+        "value": "PostmanRuntime/7.52.0",
+        "system": true
+      },
+      {
+        "key": "Accept",
+        "value": "*/*",
+        "system": true
+      },
+      {
+        "key": "Cache-Control",
+        "value": "no-cache",
+        "system": true
+      },
+      {
+        "key": "Postman-Token",
+        "value": "5d0a6af5-9c85-4dd0-b064-fcf984dbb785",
+        "system": true
+      },
+      {
+        "key": "Host",
+        "value": "localhost:5000",
+        "system": true
+      },
+      {
+        "key": "Accept-Encoding",
+        "value": "gzip, deflate, br",
+        "system": true
+      },
+      {
+        "key": "Connection",
+        "value": "keep-alive",
+        "system": true
+      }
+    ],
+    "method": "GET",
+    "body": ""
+  },
+  "response": {
+    "id": "32de629b-593f-4866-813a-7836b5fabab3",
+    "status": "OK",
+    "code": 200,
+    "header": [
+      {
+        "key": "X-Powered-By",
+        "value": "Express"
+      },
+      {
+        "key": "Access-Control-Allow-Origin",
+        "value": "*"
+      },
+      {
+        "key": "Content-Type",
+        "value": "application/json; charset=utf-8"
+      },
+      {
+        "key": "Content-Length",
+        "value": "767"
+      },
+      {
+        "key": "ETag",
+        "value": "W/\"2ff-dGsDqpLCMSJhd05SmgTbR6IpJ74\""
+      },
+      {
+        "key": "Date",
+        "value": "Fri, 26 Jun 2026 02:01:08 GMT"
+      },
+      {
+        "key": "Connection",
+        "value": "keep-alive"
+      },
+      {
+        "key": "Keep-Alive",
+        "value": "timeout=5"
+      }
+    ],
+    "cookie": [],
+    "responseTime": 80,
+    "responseSize": 767,
+    "downloadedBytes": 767,
+    "body": "{\"success\":true,\"data\":[{\"_id\":\"6a3ca0aa18f1172ee3c1a7d3\",\"name\":\"Rahul Kumar\",\"latitude\":23.3441,\"longitude\":85.3096,\"h3Index\":\"873ca8534ffffff\",\"rating\":4.5,\"availabilityStatus\":\"OFFLINE\",\"status\":\"IDLE\",\"activeOrders\":0,\"currentOrderId\":null,\"nextOrderId\":null,\"deliveryTimestamps\":[],\"isSimulated\":false,\"createdAt\":\"2026-06-25T03:29:46.046Z\",\"updatedAt\":\"2026-06-25T03:29:46.046Z\",\"__v\":0},{\"_id\":\"6a3ca09d18f1172ee3c1a7c7\",\"name\":\"Rahul Kumar\",\"latitude\":23.3441,\"longitude\":85.3096,\"h3Index\":\"873ca8534ffffff\",\"rating\":4.5,\"availabilityStatus\":\"OFFLINE\",\"status\":\"IDLE\",\"activeOrders\":0,\"currentOrderId\":null,\"nextOrderId\":null,\"deliveryTimestamps\":[],\"isSimulated\":false,\"createdAt\":\"2026-06-25T03:29:33.354Z\",\"updatedAt\":\"2026-06-25T03:29:33.354Z\",\"__v\":0}]}"
+  },
+  "timestamp": "2026-06-26T02:01:08.912Z",
+  "tests": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "results": []
+  },
+  "scriptLogs": []
+}

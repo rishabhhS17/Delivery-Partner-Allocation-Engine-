@@ -173,9 +173,10 @@ Exported function: `allocateOrder(order, h3Buckets, riderState, weights)`
 
 ```
 1. restaurantHex = h3.latLngToCell(order.restaurantLat, order.restaurantLng, H3_RESOLUTION)
+   // latLngToCell is pure bit manipulation — O(1), no schema field needed
 2. candidateCells = h3.gridDisk(restaurantHex, H3_CANDIDATE_K)  // 19 cells
 3. candidates = union of h3Buckets[cell] for each cell
-   → filter: rider.availabilityStatus === 'ONLINE'
+   → filter: rider.availabilityStatus === 'ONLINE' AND rider.nextOrderId == null
 
 4. For each candidate, compute ETAR:
    a. Get rider's active order from riderState
@@ -263,8 +264,8 @@ let   tickTimer   = null
 
 **Stage 1 — Process queue:**
 - Sort queue: priority DESC, then queuedAt ASC
-- For the first PENDING order in queue:
-  - Call `allocateOrder(order, h3Buckets, riderState, getWeights())`
+- **Sweep ALL orders in pendingQueue** in sorted order (not just the oldest):
+  - For each order, call `allocateOrder(order, h3Buckets, riderState, getWeights())`
   - If winner found:
     - If winner is `IDLE`:
       - Compute `leg1Duration_s`, `leg2Duration_s` from haversine distances
@@ -276,12 +277,13 @@ let   tickTimer   = null
       - Write `AllocationHistory` record
       - Remove order from queue
     - If winner is `ACCEPTED` or `PICKED_UP`:
-      - Set `rider.nextOrderId = order._id` in riderState
+      - Set `rider.nextOrderId = order._id` in **riderState** (in-memory immediately)
       - Compute leg durations and polyline now (store on order), but do NOT set legStartedAt yet
       - Flush to MongoDB: rider.nextOrderId + order (status=ASSIGNED, assignedRiderId, assignedAt, leg1Duration_s, leg2Duration_s, polyline)
       - Write `AllocationHistory` record
       - Remove order from queue
-  - If no winner: leave order in queue
+  - If no winner: leave order in queue — retried next tick
+  - **Double-assignment guard:** because `riderState` is updated in-memory immediately after each assignment, subsequent orders in the same sweep see the rider's `nextOrderId` already set and skip them at the filter step — no extra tracking needed
 
 **Stage 2 — Move riders:**
 - For each rider in riderState where status is ACCEPTED or PICKED_UP:
@@ -356,21 +358,34 @@ on('connection', socket):
 
 ---
 
-## Phase B10 — Auth
+## Phase B10 — Auth (OAuth + JWT session)
 
-**Files:** `src/routes/auth.js`, `src/controllers/authController.js`
-Extend `src/middleware/authMiddleware.js`
+> ⚠️ Implement after B8 + B9 (simulation engine fully operational). The current `src/routes/auth.js` is a temporary email/password scaffold used during development and will be replaced entirely in this phase.
+
+**New packages:** `passport`, `passport-google-oauth20`, `express-session`
+
+**New env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `FRONTEND_URL`
+
+**Files:** `src/routes/auth.js` (rewrite), `src/middleware/authMiddleware.js` (implement)
+
+**OAuth flow:**
+1. `GET /api/auth/google` — redirect to Google consent screen
+2. `GET /api/auth/google/callback` — exchange code for profile; look up or create `User` by `googleId`/`email`; sign JWT `{ userId, email, role }`; redirect to `FRONTEND_URL/auth/callback?token=<jwt>`
+3. Frontend stores token in `localStorage`, calls `GET /auth/me` to populate `AuthContext`
 
 **Endpoints:**
-- `POST /auth/login` — email + password; returns JWT. Two roles: `admin`, `partner`
-- `POST /auth/logout` — invalidate (client-side token drop is fine for Phase 1)
-- `GET /auth/me` — return current user from token
+- `GET /auth/google` — initiate OAuth redirect
+- `GET /auth/google/callback` — OAuth callback; issues JWT; redirects to frontend
+- `GET /auth/me` — return current user (via `protect` middleware)
+- Remove `POST /auth/login` (email/password) entirely
 
-**`authMiddleware.js`:** verify JWT, attach `req.user = { id, role }`. Admin routes require `role === 'admin'`. Partner routes require `role === 'partner'` or `admin`.
+**`authMiddleware.js`:** verify `Authorization: Bearer <token>`, attach `req.user = { userId, email, role }`, reject 401 on failure. Apply `protect` to all routes in `routes/index.js` except `/health`, `/auth`, and `/analytics`.
 
-For partners, the User document maps to a `Rider._id` (add `riderId` field to user doc or use a simple user collection with role + riderId).
+**Roles:** seed sets `role: 'admin'` for the first user; all new OAuth logins default to `'partner'` unless explicitly elevated in DB. Partner `User` doc maps to `riderId` for delivery partner flows.
 
-**Done when:** login returns a JWT; protected routes reject a missing/invalid token with 401; `GET /auth/me` returns the logged-in user.
+**User model addition:** add `googleId: { type: String, unique: true, sparse: true }` to `User.js`.
+
+**Done when:** navigating to the app without a token redirects to `/login`; clicking "Sign in with Google" completes the OAuth flow and lands on `/dashboard`; all API routes reject unauthenticated requests with 401.
 
 ---
 
@@ -403,6 +418,7 @@ Also add: `PUT /orders/:id/accept` — partner accepts assigned order (for Phase
 | Enhancement | File | Notes |
 |---|---|---|
 | **Stale order backoff** | `simulation.js` | After `MAX_ALLOCATION_RETRIES` failed ticks, move order to back of queue (`queuedAt=now`, priority=0) |
+| **Event-driven queue drain (`tryDrainQueue`)** | `simulation.js` | Replace the per-tick full-queue sweep with an event-driven drain: when a rider transitions to `IDLE`, immediately scan `pendingQueue` for orders whose `restaurantH3` falls within that rider's k=2 zone and attempt allocation. Zero wasted allocation cycles between state changes — upgrade from the MVP retry-every-tick approach. |
 | **nextOrderId offline** | `simulation.js` `handleRiderOffline()` | If rider has `nextOrderId`, reset that order to PENDING at priority 0; clear `nextOrderId` |
 | **SLA flagging** | `simulation.js` + analytics | Flag orders where `now - queuedAt > SLA_THRESHOLD_MS`; add `isSlaBreached` to broadcast |
 | **Road routing (Phase 2 seam)** | `routingService.js` + `simulation.js` | Replace 2-point Haversine polyline with Mapbox Directions `driving` profile. Called once at assignment. Frontend renders same `polyline` array unchanged. Required before B13. |
@@ -558,7 +574,7 @@ io.emit('simulation:tick', {
 | B7 | `services/orderGenerator.js` | Orders created within service area |
 | B8 | `services/simulation.js` | Full delivery cycle, lifecycle DB writes only |
 | B9 | `server.js` WS wiring | Sim starts/stops with clients |
-| B10 | `routes/auth.js` + middleware | JWT auth works |
+| B10 | `routes/auth.js` + middleware | Google OAuth → JWT session; all routes protected |
 | B11 | `routes/analytics.js` | Dashboard aggregates correct |
 | B12 | Enhancements (stale backoff, SLA, road routing) | Per priority |
 | B13 | Traffic-adaptive speed (single snapshot, segment traversal model) | Riders slow in traffic |

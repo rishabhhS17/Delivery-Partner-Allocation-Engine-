@@ -10,7 +10,7 @@
 
 .weightGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-lg);
 }
 
@@ -27,10 +27,47 @@
 }
 
 .weightLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
   margin-bottom: var(--space-xs);
-  color: var(--body);
 }
 
 .weightValue {
   font-weight: 300;
+  margin-bottom: var(--space-xs);
+}
+
+.weightDesc {
+  font-size: 12px;
+  color: var(--mute);
+  margin-bottom: var(--space-sm);
+}
+
+.weightInput {
+  margin-top: var(--space-xs);
+}
+
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+}
+
+.saveBtn {
+  min-width: 140px;
+}
+
+.savedText {
+  font-size: 13px;
+  color: var(--link);
+}
+
+.errorText {
+  font-size: 13px;
+  color: var(--error);
 }
