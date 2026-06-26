@@ -173,9 +173,10 @@ Exported function: `allocateOrder(order, h3Buckets, riderState, weights)`
 
 ```
 1. restaurantHex = h3.latLngToCell(order.restaurantLat, order.restaurantLng, H3_RESOLUTION)
+   // latLngToCell is pure bit manipulation — O(1), no schema field needed
 2. candidateCells = h3.gridDisk(restaurantHex, H3_CANDIDATE_K)  // 19 cells
 3. candidates = union of h3Buckets[cell] for each cell
-   → filter: rider.availabilityStatus === 'ONLINE'
+   → filter: rider.availabilityStatus === 'ONLINE' AND rider.nextOrderId == null
 
 4. For each candidate, compute ETAR:
    a. Get rider's active order from riderState
@@ -263,8 +264,8 @@ let   tickTimer   = null
 
 **Stage 1 — Process queue:**
 - Sort queue: priority DESC, then queuedAt ASC
-- For the first PENDING order in queue:
-  - Call `allocateOrder(order, h3Buckets, riderState, getWeights())`
+- **Sweep ALL orders in pendingQueue** in sorted order (not just the oldest):
+  - For each order, call `allocateOrder(order, h3Buckets, riderState, getWeights())`
   - If winner found:
     - If winner is `IDLE`:
       - Compute `leg1Duration_s`, `leg2Duration_s` from haversine distances
@@ -276,12 +277,13 @@ let   tickTimer   = null
       - Write `AllocationHistory` record
       - Remove order from queue
     - If winner is `ACCEPTED` or `PICKED_UP`:
-      - Set `rider.nextOrderId = order._id` in riderState
+      - Set `rider.nextOrderId = order._id` in **riderState** (in-memory immediately)
       - Compute leg durations and polyline now (store on order), but do NOT set legStartedAt yet
       - Flush to MongoDB: rider.nextOrderId + order (status=ASSIGNED, assignedRiderId, assignedAt, leg1Duration_s, leg2Duration_s, polyline)
       - Write `AllocationHistory` record
       - Remove order from queue
-  - If no winner: leave order in queue
+  - If no winner: leave order in queue — retried next tick
+  - **Double-assignment guard:** because `riderState` is updated in-memory immediately after each assignment, subsequent orders in the same sweep see the rider's `nextOrderId` already set and skip them at the filter step — no extra tracking needed
 
 **Stage 2 — Move riders:**
 - For each rider in riderState where status is ACCEPTED or PICKED_UP:
@@ -403,6 +405,7 @@ Also add: `PUT /orders/:id/accept` — partner accepts assigned order (for Phase
 | Enhancement | File | Notes |
 |---|---|---|
 | **Stale order backoff** | `simulation.js` | After `MAX_ALLOCATION_RETRIES` failed ticks, move order to back of queue (`queuedAt=now`, priority=0) |
+| **Event-driven queue drain (`tryDrainQueue`)** | `simulation.js` | Replace the per-tick full-queue sweep with an event-driven drain: when a rider transitions to `IDLE`, immediately scan `pendingQueue` for orders whose `restaurantH3` falls within that rider's k=2 zone and attempt allocation. Zero wasted allocation cycles between state changes — upgrade from the MVP retry-every-tick approach. |
 | **nextOrderId offline** | `simulation.js` `handleRiderOffline()` | If rider has `nextOrderId`, reset that order to PENDING at priority 0; clear `nextOrderId` |
 | **SLA flagging** | `simulation.js` + analytics | Flag orders where `now - queuedAt > SLA_THRESHOLD_MS`; add `isSlaBreached` to broadcast |
 | **Road routing (Phase 2 seam)** | `routingService.js` + `simulation.js` | Replace 2-point Haversine polyline with Mapbox Directions `driving` profile. Called once at assignment. Frontend renders same `polyline` array unchanged. Required before B13. |

@@ -80,14 +80,20 @@ restaurantHex  = h3.latLngToCell(restaurant.lat, restaurant.lng, 7)
 candidateZone  = h3.gridDisk(restaurantHex, 2)          // 19 hexagons, ~4–5 km
 ```
 
-A rider is in the **geo-candidate pool** if:
+A rider is in the **geo-candidate pool** if ALL three conditions hold:
 - Their pre-computed `h3Index` (stored on the Rider document at resolution 7) is contained in `candidateZone`
 - `availabilityStatus === 'ONLINE'`
+- `nextOrderId === null` — not already pre-assigned to a queued order
 
 > **Key change from v1:** Riders with status `ACCEPTED` or `PICKED_UP` are now
 > included — not just `IDLE`. A rider finishing a nearby delivery is a real
 > candidate. Their availability is handled by ETAR (they have a non-zero
 > time-to-free).
+>
+> **`nextOrderId` exclusion:** A rider mid-delivery who has already been
+> pre-assigned their next order is fully committed. Including them as a
+> candidate would either double-assign them or waste a scoring cycle that
+> always ends in a no-op. They are excluded at the filter step.
 
 **This lookup is performed against the in-memory H3 bucket map, not a MongoDB
 query.** See §2.1 below for the in-memory index architecture.
@@ -286,7 +292,7 @@ have won because IDLE was a hard filter. This is the core improvement.
 
 | Scenario | Phase | Behaviour |
 |----------|-------|-----------|
-| No ONLINE riders in k=2 ring | Core | Order stays `PENDING` in FIFO queue, retried next tick |
+| No ONLINE riders in k=2 ring (or all have `nextOrderId` set) | Core | Order stays `PENDING` in `pendingQueue`; **all** pending orders are retried on every tick until a rider becomes available |
 | Assigned (`ACCEPTED`) rider goes `OFFLINE` | Core | Order reset to `PENDING`, `queuedAt = now`, pushed to **front** of queue at priority 1; rider cleared |
 | Pre-assigned rider (`nextOrderId`) goes `OFFLINE` | Enhancement | Order reset to `PENDING`, re-queued at back at normal priority |
 | Order still unassigned after `MAX_ALLOCATION_RETRIES` ticks | Enhancement | Order moved to back of queue (`queuedAt = now`) to unblock newer orders |
