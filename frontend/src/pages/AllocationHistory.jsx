@@ -1,34 +1,44 @@
 import { useEffect, useState } from 'react';
 import {
-  Box, Alert, Paper, Table, TableBody, TableCell,
+  Box, Alert, Button, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material';
+import { History, RefreshCw, Star } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
+import { SkeletonRows } from '../components/common/Skeleton';
 import { getAllocationHistory } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './AllocationHistory.module.css';
 
+const COLUMNS = 6;
+
 export default function AllocationHistory() {
   const [records, setRecords] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
   const { allocations } = useSimulation();
 
-  useEffect(() => {
+  const fetchHistory = () => {
+    setStatus('loading');
     getAllocationHistory({ limit: 50 })
-      .then((res) => setRecords(res.data.records ?? []))
-      .catch(() => setRecords([]));
-  }, []);
+      .then((res) => {
+        setRecords(res.data.records ?? []);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
+  };
+
+  useEffect(fetchHistory, []);
 
   // Prepend live simulation events that aren't already in REST records
   const restIds = new Set(records.map((r) => String(r.orderId?._id ?? r.orderId)));
   const liveRows = allocations.filter((a) => !restIds.has(String(a.orderId)));
 
-  const isEmpty = liveRows.length === 0 && records.length === 0;
+  const isEmpty = status === 'ready' && liveRows.length === 0 && records.length === 0;
 
   return (
     <Box>
       <PageHeader
-        eyebrow="Ops — Allocations"
         title="Allocation History"
         description="Audit log of all rider assignments and scoring decisions."
       />
@@ -51,10 +61,29 @@ export default function AllocationHistory() {
             </TableRow>
           </TableHead>
           <TableBody>
+            {status === 'loading' && <SkeletonRows columns={COLUMNS} />}
+
+            {status === 'error' && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS} className={styles.emptyCell}>
+                  <EmptyState
+                    title="Could not load allocation history"
+                    description="The backend isn’t reachable yet — this will resolve once it’s live."
+                    action={
+                      <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={fetchHistory}>
+                        Retry
+                      </Button>
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+
             {isEmpty && (
               <TableRow>
-                <TableCell colSpan={6} className={styles.emptyCell}>
+                <TableCell colSpan={COLUMNS} className={styles.emptyCell}>
                   <EmptyState
+                    icon={History}
                     title="No allocations yet"
                     description="Records appear here as riders are assigned to orders."
                   />
@@ -62,7 +91,7 @@ export default function AllocationHistory() {
               </TableRow>
             )}
 
-            {liveRows.map((a) => (
+            {status === 'ready' && liveRows.map((a) => (
               <TableRow key={`live-${a.orderId}-${a.ts}`}>
                 <TableCell className={styles.idCell}>
                   …{String(a.orderId).slice(-8)}
@@ -83,7 +112,7 @@ export default function AllocationHistory() {
               </TableRow>
             ))}
 
-            {records.map((r) => (
+            {status === 'ready' && records.map((r) => (
               <TableRow key={r._id}>
                 <TableCell>
                   <Typography variant="body2" className={styles.orderPrimary}>
@@ -97,7 +126,7 @@ export default function AllocationHistory() {
                   <Typography variant="body2">{r.riderId?.name ?? '—'}</Typography>
                   {r.riderId?.rating && (
                     <Typography variant="body2" className={styles.orderSecondary}>
-                      ★ {r.riderId.rating}
+                      <Star size={11} className={styles.starIcon} /> {r.riderId.rating}
                     </Typography>
                   )}
                 </TableCell>

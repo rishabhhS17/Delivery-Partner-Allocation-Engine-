@@ -8,6 +8,23 @@
   text-align: center;
 }
 
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background-color: var(--hairline-soft);
+  color: var(--mute);
+  margin-bottom: var(--space-xs);
+}
+
+.fallbackMark {
+  opacity: 0.5;
+  margin-bottom: var(--space-xs);
+}
+
 .title {
   font-size: 14px;
   font-weight: 500;
@@ -17,4 +34,9 @@
 .description {
   font-size: 14px;
   color: var(--mute);
+  max-width: 320px;
+}
+
+.action {
+  margin-top: var(--space-sm);
 }

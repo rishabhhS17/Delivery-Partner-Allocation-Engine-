@@ -1,16 +1,21 @@
 /*
-  Design tokens mirrored verbatim from DESIGN-vercel.md (colors / rounded / spacing blocks).
-  Single source of truth for theme.js (MUI) and every *.module.css file.
+  Design tokens, mirroring DESIGN-vercel.md's colors/rounded/spacing blocks, extended with a
+  full semantic layer (premium light/dark theme spec). Single source of truth for theme.js
+  (MUI) and every *.module.css file. Primitives (--ink, --canvas, --link, ...) hold the actual
+  values; the "Semantic aliases" block gives every primitive a role-based name so components
+  can read intent (--color-text-primary) instead of a raw hue (--ink). Nothing below renames or
+  removes an existing primitive — every current .module.css reference keeps working unchanged.
 */
 :root {
-  /* colors — light mode (default) */
+  /* colors — light mode (default): warm, soft-on-the-eyes neutrals, not stark pure white */
   --ink: #171717;
   --body: #4d4d4d;
   --mute: #8f8f8f;
   --faint: #a1a1a1;
-  --hairline: #ebebeb;
-  --hairline-soft: #f2f2f2;
-  --canvas: #fafafa;
+  --hairline: #e7e4df;
+  --hairline-strong: #d8d4cc;
+  --hairline-soft: #f4f2ee;
+  --canvas: #faf9f6;
   --surface: #ffffff;
 
   --link: #0070f3;
@@ -18,16 +23,28 @@
   --link-soft: #d3e5ff;
 
   --warning: #f5a623;
+  --warning-deep: #ab570a;
   --warning-soft: #ffefcf;
 
   --violet: #7928ca;
   --violet-soft: #d8ccf1;
 
-  --error: #ee0000;
-  --error-deep: #c50000;
+  /* "modern crimson" — refined from a flat pure-red to a deeper, less harsh tone */
+  --error: #dc2626;
+  --error-deep: #b91c1c;
   --error-soft: #fde2e2;
 
-  /* mesh gradient stops — Login hero only */
+  /* rich emerald */
+  --success: #059669;
+  --success-deep: #047857;
+  --success-soft: #d1fae5;
+
+  /* elegant cyan — already in use as the "customer" map marker; formalized as the info role */
+  --info: #06b6d4;
+  --info-deep: #0e7490;
+  --info-soft: #cffafe;
+
+  /* mesh gradient stops — Login hero only; the system's one deliberate decorative flourish */
   --gradient-develop-start: #007cf0;
   --gradient-develop-end: #00dfd8;
   --gradient-preview-start: #7928ca;
@@ -40,6 +57,7 @@
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-pill: 9999px;
 
   /* spacing */
@@ -56,10 +74,65 @@
 
   /* typography */
   --font-sans: 'Inter', 'SF Pro Display', system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Space Grotesk', 'Geist', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+
+  /* elevation — light: hairline-first, shadow barely whispers */
+  --surface-raised: #ffffff;
+  --shadow-xs: 0 1px 1px rgba(23, 23, 23, 0.03);
+  --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(23, 23, 23, 0.10), 0 2px 4px -2px rgba(23, 23, 23, 0.06);
+  --shadow-lg: 0 16px 32px -8px rgba(23, 23, 23, 0.14), 0 4px 8px -4px rgba(23, 23, 23, 0.08);
+  --shadow-modal: 0 24px 48px -12px rgba(23, 23, 23, 0.18), 0 8px 16px -8px rgba(23, 23, 23, 0.10);
+
+  /* interaction washes — generic tint for hover/active backgrounds on any surface */
+  --hover-tint: rgba(23, 23, 23, 0.04);
+  --active-tint: rgba(23, 23, 23, 0.08);
+  --focus-ring: rgba(0, 112, 243, 0.15);
+  --overlay: rgba(23, 20, 16, 0.36);
+
+  /* qualitative chart/data-viz palette — drawn from the existing accent set, not new hues */
+  --chart-1: var(--link);
+  --chart-2: var(--success);
+  --chart-3: var(--warning);
+  --chart-4: var(--violet);
+  --chart-5: var(--info);
+  --chart-6: var(--error);
+
+  /* Semantic aliases — same values as the primitives above, named by role per the design spec */
+  --color-background: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-raised);
+  --color-card: var(--surface);
+  --color-sidebar: var(--surface);
+  --color-nav: var(--surface);
+  --color-border: var(--hairline);
+  --color-border-strong: var(--hairline-strong);
+  --color-text-primary: var(--ink);
+  --color-text-secondary: var(--body);
+  --color-text-muted: var(--mute);
+  --color-disabled: var(--faint);
+  --color-primary: var(--ink);
+  --color-primary-hover: #000000;
+  --color-secondary: var(--hairline-soft);
+  --color-accent: var(--link);
+  --color-accent-hover: var(--link-deep);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--error);
+  --color-info: var(--info);
+  --color-hover: var(--hover-tint);
+  --color-active: var(--active-tint);
+  --color-focus: var(--focus-ring);
+  --color-overlay: var(--overlay);
 }
 
-/* Dark mode */
+/* Dark mode — deep charcoal, not absolute black; three distinct elevation tiers */
 @media (prefers-color-scheme: dark) {
   :root {
     --ink: #e6edf3;
@@ -67,6 +140,7 @@
     --mute: #6e7681;
     --faint: #484f58;
     --hairline: #30363d;
+    --hairline-strong: #3d444d;
     --hairline-soft: #21262d;
     --canvas: #0d1117;
     --surface: #161b22;
@@ -76,24 +150,49 @@
     --link-soft: #1a3a66;
 
     --warning: #f5a623;
+    --warning-deep: #ffb84d;
     --warning-soft: #3d2a15;
 
     --violet: #b78dff;
     --violet-soft: #3d2666;
 
-    --error: #ff4444;
-    --error-deep: #ff2222;
-    --error-soft: #662222;
+    --error: #f87171;
+    --error-deep: #fca5a5;
+    --error-soft: #450a0a;
+
+    --success: #34d399;
+    --success-deep: #6ee7b7;
+    --success-soft: #064e3b;
+
+    --info: #22d3ee;
+    --info-deep: #67e8f9;
+    --info-soft: #083344;
+
+    /* elevation — dark: shadows barely register, lean on a brighter hairline + deeper black */
+    --surface-raised: #1c2128;
+    --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.24);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-lg: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --shadow-modal: 0 24px 56px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+    --hover-tint: rgba(255, 255, 255, 0.06);
+    --active-tint: rgba(255, 255, 255, 0.10);
+    --focus-ring: rgba(88, 166, 255, 0.25);
+    --overlay: rgba(1, 4, 9, 0.6);
+
+    --color-primary-hover: #c9d1d9;
   }
 }
 
-/* Manual dark mode toggle (via JavaScript data attribute) */
+/* Manual dark mode toggle (via JavaScript data attribute) — kept in sync with the block above */
 html[data-theme="dark"] {
   --ink: #e6edf3;
   --body: #8b949e;
   --mute: #6e7681;
   --faint: #484f58;
   --hairline: #30363d;
+  --hairline-strong: #3d444d;
   --hairline-soft: #21262d;
   --canvas: #0d1117;
   --surface: #161b22;
@@ -103,12 +202,63 @@ html[data-theme="dark"] {
   --link-soft: #1a3a66;
 
   --warning: #f5a623;
+  --warning-deep: #ffb84d;
   --warning-soft: #3d2a15;
 
   --violet: #b78dff;
   --violet-soft: #3d2666;
 
-  --error: #ff4444;
-  --error-deep: #ff2222;
-  --error-soft: #662222;
+  --error: #f87171;
+  --error-deep: #fca5a5;
+  --error-soft: #450a0a;
+
+  --success: #34d399;
+  --success-deep: #6ee7b7;
+  --success-soft: #064e3b;
+
+  --info: #22d3ee;
+  --info-deep: #67e8f9;
+  --info-soft: #083344;
+
+  --surface-raised: #1c2128;
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.24);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-modal: 0 24px 56px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --hover-tint: rgba(255, 255, 255, 0.06);
+  --active-tint: rgba(255, 255, 255, 0.10);
+  --focus-ring: rgba(88, 166, 255, 0.25);
+  --overlay: rgba(1, 4, 9, 0.6);
+
+  --color-primary-hover: #c9d1d9;
+}
+
+/* Theme-switch transition: only background/text/border so toggling never animates layout
+   (no width/height/transform here — that's what causes shifting). Scoped to plain elements
+   (not MUI components) — MUI's Paper/AppBar/Drawer/etc. already carry their own unconditional
+   base `transition` rule, and a same-specificity global class selector here would gamble on
+   stylesheet insertion order to win, the exact bug already hit once with AppBar/IconButton.
+   Those get the same transition added via theme.js's styleOverrides instead, which is
+   guaranteed to apply after MUI's base styles. */
+body, #root {
+  transition: background-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
+}
+
+/* Visible keyboard focus everywhere — mouse users don't see it (:focus-visible). */
+:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

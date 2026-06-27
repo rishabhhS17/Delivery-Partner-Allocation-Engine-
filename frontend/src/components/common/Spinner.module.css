@@ -1,0 +1,17 @@
+.spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.85;
+  animation: spin 0.6s linear infinite;
+}
+
+.spinner[data-size='sm'] { width: 14px; height: 14px; }
+.spinner[data-size='md'] { width: 18px; height: 18px; }
+.spinner[data-size='lg'] { width: 24px; height: 24px; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import MapGL, { Source, Layer } from 'react-map-gl';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
+import LiveDot from '../components/common/LiveDot';
 import { useSimulation } from '../context/SimulationContext';
 import { getOrders, getRestaurants } from '../api/endpoints';
 import styles from './OrdersMap.module.css';
@@ -206,14 +207,18 @@ export default function OrdersMap() {
     })),
   }), [riders]);
 
-  const eyebrow = connected
-    ? `Orders — Live · ${pendingOrders.length} pending · ${inTransit} in transit`
-    : 'Orders — Waiting for simulation…';
+  const eyebrow = (
+    <span className={styles.liveEyebrow}>
+      <LiveDot active={connected} />
+      {connected
+        ? `Orders — Live · ${pendingOrders.length} pending · ${inTransit} in transit`
+        : 'Orders — Waiting for simulation…'}
+    </span>
+  );
 
   return (
     <Box>
       <PageHeader
-        eyebrow="Ops — Orders"
         title="Order Map"
         description="Live view of all active orders, pending queue, delivery routes, and rider positions."
       />

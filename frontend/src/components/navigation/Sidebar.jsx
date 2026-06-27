@@ -1,27 +1,32 @@
 import { Drawer, List, ListItem, ListItemButton, ListItemText, Toolbar, Box } from '@mui/material';
 import { NavLink, useLocation } from 'react-router-dom';
 import { NAVIGATION_ITEMS } from '../../config/navigation.js';
+import Logo from '../common/Logo';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const location = useLocation();
+  const activeIndex = NAVIGATION_ITEMS.findIndex((item) => location.pathname.startsWith(item.path));
 
   const drawerContent = (
     <div>
       <Toolbar>
-        <Box className={styles.wordmark}>Allocation Engine</Box>
+        <Logo variant="full" size="sm" className={styles.wordmark} />
       </Toolbar>
-      <List disablePadding>
+      <List disablePadding className={styles.list} data-active-index={activeIndex}>
+        <span className={styles.indicator} aria-hidden="true" />
         {NAVIGATION_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path);
+          const Icon = item.icon;
           return (
-            <ListItem key={item.label} disablePadding>
+            <ListItem key={item.label} disablePadding className={styles.listItem}>
               <ListItemButton
                 component={NavLink}
                 to={item.path}
                 onClick={handleDrawerToggle ? () => handleDrawerToggle(false) : undefined}
                 className={`${styles.navItem} ${isActive ? styles.navItemActive : ''}`}
               >
+                {Icon && <Icon size={18} className={styles.navIcon} />}
                 <ListItemText
                   primary={item.label}
                   primaryTypographyProps={{ className: styles.navLabel }}

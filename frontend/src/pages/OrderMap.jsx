@@ -1,11 +1,14 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import { RefreshCw } from 'lucide-react';
 import Map, { Source, Layer, Marker } from 'react-map-gl';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
 import StatusBadge from '../components/common/StatusBadge';
+import EmptyState from '../components/common/EmptyState';
+import { Skeleton } from '../components/common/Skeleton';
 import { getOrder } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './OrderMap.module.css';
@@ -23,13 +26,23 @@ const routeLineLayer = {
 export default function OrderMap() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
   const { riders } = useSimulation();
 
-  useEffect(() => {
+  const fetchOrder = () => {
+    setStatus('loading');
     getOrder(id)
-      .then((res) => setOrder(res.data?.data ?? res.data))
-      .catch(() => setOrder(null));
-  }, [id]);
+      .then((res) => {
+        setOrder(res.data?.data ?? res.data);
+        setStatus('ready');
+      })
+      .catch(() => {
+        setOrder(null);
+        setStatus('error');
+      });
+  };
+
+  useEffect(fetchOrder, [id]);
 
   const assignedRider = useMemo(
     () => riders.find((r) => r.orderId === id),
@@ -56,7 +69,6 @@ export default function OrderMap() {
   return (
     <Box>
       <PageHeader
-        eyebrow={`Ops — Order ${id}`}
         title="Order Map"
         description="Restaurant, customer, and assigned rider for this delivery."
         action={order && <StatusBadge kind="order" status={order.status} />}
@@ -72,35 +84,51 @@ export default function OrderMap() {
         variant="full"
       >
         <div className={styles.mapWrap}>
-          <Map
-            mapboxAccessToken={MAPBOX_TOKEN}
-            initialViewState={initialView}
-            mapStyle={MAP_STYLE}
-          >
-            {hasRoute && (
-              <Source id="order-route" type="geojson" data={routeGeojson}>
-                <Layer {...routeLineLayer} />
-              </Source>
-            )}
+          {status === 'loading' && <Skeleton shape="block" />}
 
-            {order && (
-              <Marker longitude={order.restaurantLng} latitude={order.restaurantLat} anchor="center">
-                <div className={styles.pinRestaurant} />
-              </Marker>
-            )}
+          {status === 'error' && (
+            <EmptyState
+              title="Could not load this order"
+              description="The backend isn’t reachable yet — this will resolve once it’s live."
+              action={
+                <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={fetchOrder}>
+                  Retry
+                </Button>
+              }
+            />
+          )}
 
-            {order && (
-              <Marker longitude={order.customerLng} latitude={order.customerLat} anchor="center">
-                <div className={styles.pinCustomer} />
-              </Marker>
-            )}
+          {status === 'ready' && (
+            <Map
+              mapboxAccessToken={MAPBOX_TOKEN}
+              initialViewState={initialView}
+              mapStyle={MAP_STYLE}
+            >
+              {hasRoute && (
+                <Source id="order-route" type="geojson" data={routeGeojson}>
+                  <Layer {...routeLineLayer} />
+                </Source>
+              )}
 
-            {assignedRider && (
-              <Marker longitude={assignedRider.lng} latitude={assignedRider.lat} anchor="center">
-                <div className={styles.pinRider} />
-              </Marker>
-            )}
-          </Map>
+              {order && (
+                <Marker longitude={order.restaurantLng} latitude={order.restaurantLat} anchor="center">
+                  <div className={styles.pinRestaurant} />
+                </Marker>
+              )}
+
+              {order && (
+                <Marker longitude={order.customerLng} latitude={order.customerLat} anchor="center">
+                  <div className={styles.pinCustomer} />
+                </Marker>
+              )}
+
+              {assignedRider && (
+                <Marker longitude={assignedRider.lng} latitude={assignedRider.lat} anchor="center">
+                  <div className={styles.pinRider} />
+                </Marker>
+              )}
+            </Map>
+          )}
         </div>
       </MapPanel>
     </Box>

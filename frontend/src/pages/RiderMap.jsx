@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import Map, { Source, Layer, Popup } from 'react-map-gl';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
+import LiveDot from '../components/common/LiveDot';
 import { useSimulation } from '../context/SimulationContext';
 import { getRestaurants } from '../api/endpoints';
 import styles from './RiderMap.module.css';
@@ -204,14 +205,18 @@ export default function RiderMap() {
     return { idle, active, offline };
   }, [riders]);
 
-  const eyebrow = connected
-    ? `Fleet — Live · ${riders.length} riders · Queue: ${queueDepth}`
-    : 'Fleet — Waiting for simulation…';
+  const eyebrow = (
+    <span className={styles.liveEyebrow}>
+      <LiveDot active={connected} />
+      {connected
+        ? `Fleet — Live · ${riders.length} riders · Queue: ${queueDepth}`
+        : 'Fleet — Waiting for simulation…'}
+    </span>
+  );
 
   return (
     <Box>
       <PageHeader
-        eyebrow="Ops — Fleet"
         title="Rider Map"
         description="Live positions of every rider, color-coded by movement state."
       />

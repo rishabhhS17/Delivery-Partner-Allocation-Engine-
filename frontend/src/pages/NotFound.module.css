@@ -1,0 +1,25 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-xs);
+  padding: var(--space-4xl) var(--space-lg);
+}
+
+.code {
+  color: var(--ink);
+  margin: var(--space-md) 0 0;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.description {
+  color: var(--mute);
+  margin-bottom: var(--space-md);
+}

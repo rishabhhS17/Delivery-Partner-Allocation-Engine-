@@ -3,27 +3,25 @@
   border-bottom: 1px solid var(--hairline);
   color: var(--ink);
   height: 64px;
-  width: 100%;
-}
-
-@media (min-width: 600px) {
-  .appBar {
-    width: calc(100% - 240px);
-    margin-left: 240px;
-  }
+  /* Responsive width/margin-left (room for the 240px sidebar) lives in theme.js's MuiAppBar
+     override — MUI's own base AppBar rule sets width:100%/left:auto unconditionally, and a
+     plain CSS-module rule at equal specificity can lose that cascade fight. */
 }
 
 .toolbar {
   height: 64px;
 }
 
-.menuButton {
+/* Element+class (not just .menuButton) to outrank MUI's own unconditional
+   `.css-xxx-MuiIconButton-root { display: inline-flex }` rule — same selector
+   specificity loses ties based on stylesheet insertion order, which isn't ours to control. */
+button.menuButton {
   margin-right: var(--space-md);
   display: inline-flex;
 }
 
 @media (min-width: 600px) {
-  .menuButton {
+  button.menuButton {
     display: none;
   }
 }
@@ -32,33 +30,39 @@
   flex-grow: 1;
 }
 
-.searchInput {
-  width: 100%;
-}
-
-@media (min-width: 600px) {
-  .searchInput {
-    width: 280px;
-  }
-}
-
 .actions {
   display: flex;
   align-items: center;
   gap: var(--space-md);
 }
 
-.iconButton {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--hairline);
-  background-color: var(--surface);
+.liveStatus {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  cursor: pointer;
+  gap: var(--space-xs);
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background-color: var(--hairline-soft);
+}
+
+.liveLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--body);
+}
+
+@media (max-width: 599px) {
+  .liveLabel {
+    display: none;
+  }
+}
+
+.logoutButton {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .avatar {

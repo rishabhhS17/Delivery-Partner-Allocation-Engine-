@@ -1,28 +1,35 @@
 import { useEffect, useState } from 'react';
-import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import { Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button } from '@mui/material';
+import { RefreshCw } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
+import { NoRidersIllustration } from '../components/common/illustrations';
+import { SkeletonRows } from '../components/common/Skeleton';
 import { getRiders } from '../api/endpoints';
 import styles from './Riders.module.css';
+
+const COLUMNS = 6;
 
 export default function Riders() {
   const [riders, setRiders] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
 
-  useEffect(() => {
+  const fetchRiders = () => {
+    setStatus('loading');
     getRiders()
       .then((res) => {
         setRiders(res.data ?? []);
         setStatus('ready');
       })
       .catch(() => setStatus('error'));
-  }, []);
+  };
+
+  useEffect(fetchRiders, []);
 
   return (
     <Box>
       <PageHeader
-        eyebrow="Ops — Riders"
         title="Riders"
         description="Delivery partners, their live status, and current assignment."
       />
@@ -40,35 +47,50 @@ export default function Riders() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {status !== 'ready' || riders.length === 0 ? (
+            {status === 'loading' && <SkeletonRows columns={COLUMNS} />}
+
+            {status === 'error' && (
               <TableRow>
-                <TableCell colSpan={6} className={styles.emptyCell}>
+                <TableCell colSpan={COLUMNS} className={styles.emptyCell}>
                   <EmptyState
-                    title={status === 'error' ? 'Could not load riders' : 'No riders yet'}
-                    description={
-                      status === 'error'
-                        ? 'The backend isn’t reachable yet — this will resolve once it’s live.'
-                        : 'Seeded riders will appear here once the backend is running.'
+                    title="Could not load riders"
+                    description="The backend isn’t reachable yet — this will resolve once it’s live."
+                    action={
+                      <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={fetchRiders}>
+                        Retry
+                      </Button>
                     }
                   />
                 </TableCell>
               </TableRow>
-            ) : (
-              riders.map((r) => (
-                <TableRow key={r._id}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell>{r.phone}</TableCell>
-                  <TableCell className={styles.rating}>{r.rating}</TableCell>
-                  <TableCell>
-                    <span className={styles.availabilityBadge} data-online={String(r.availabilityStatus === 'ONLINE')}>
-                      {r.availabilityStatus === 'ONLINE' ? 'Online' : 'Offline'}
-                    </span>
-                  </TableCell>
-                  <TableCell><StatusBadge kind="rider" status={r.status} /></TableCell>
-                  <TableCell className={styles.rating}>{r.currentOrderId ?? '—'}</TableCell>
-                </TableRow>
-              ))
             )}
+
+            {status === 'ready' && riders.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={COLUMNS} className={styles.emptyCell}>
+                  <EmptyState
+                    illustration={NoRidersIllustration}
+                    title="No riders yet"
+                    description="Seeded riders will appear here once the backend is running."
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+
+            {status === 'ready' && riders.map((r) => (
+              <TableRow key={r._id}>
+                <TableCell>{r.name}</TableCell>
+                <TableCell>{r.phone}</TableCell>
+                <TableCell className={styles.rating}>{r.rating}</TableCell>
+                <TableCell>
+                  <span className={styles.availabilityBadge} data-online={String(r.availabilityStatus === 'ONLINE')}>
+                    {r.availabilityStatus === 'ONLINE' ? 'Online' : 'Offline'}
+                  </span>
+                </TableCell>
+                <TableCell><StatusBadge kind="rider" status={r.status} /></TableCell>
+                <TableCell className={styles.rating}>{r.currentOrderId ?? '—'}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </TableContainer>

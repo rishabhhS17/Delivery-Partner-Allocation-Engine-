@@ -4,7 +4,7 @@
 }
 
 .sectionTitle {
-  font-weight: 300;
+  font-weight: 600;
   margin-bottom: var(--space-md);
 }
 
@@ -37,7 +37,7 @@
 }
 
 .weightValue {
-  font-weight: 300;
+  font-weight: 600;
   margin-bottom: var(--space-xs);
 }
 

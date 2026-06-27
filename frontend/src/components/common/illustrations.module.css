@@ -1,0 +1,22 @@
+.illustration {
+  width: 64px;
+  height: 64px;
+  animation: float 4s var(--ease-out) infinite;
+}
+
+.muted {
+  stroke: var(--faint);
+}
+
+.accent {
+  stroke: var(--link);
+}
+
+.accentFill {
+  fill: var(--link);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}

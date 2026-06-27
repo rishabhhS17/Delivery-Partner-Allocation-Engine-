@@ -1,10 +1,4 @@
 .wordmark {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink);
   padding: var(--space-sm) var(--space-md);
 }
 
@@ -15,24 +9,88 @@
   background-color: var(--surface);
 }
 
+.list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+}
+
+/* The "floating glass pill" — one shared element that slides to the active row instead of
+   each row carrying its own background, so the move between pages reads as motion. */
+.indicator {
+  position: absolute;
+  left: var(--space-sm);
+  right: var(--space-sm);
+  top: var(--space-xs);
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background-color: var(--link-soft);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-base) var(--ease-out);
+  z-index: 0;
+}
+
+.list[data-active-index='-1'] .indicator {
+  opacity: 0;
+}
+
+.list[data-active-index='0'] .indicator { transform: translateY(calc(0 * 42px)); }
+.list[data-active-index='1'] .indicator { transform: translateY(calc(1 * 42px)); }
+.list[data-active-index='2'] .indicator { transform: translateY(calc(2 * 42px)); }
+.list[data-active-index='3'] .indicator { transform: translateY(calc(3 * 42px)); }
+.list[data-active-index='4'] .indicator { transform: translateY(calc(4 * 42px)); }
+.list[data-active-index='5'] .indicator { transform: translateY(calc(5 * 42px)); }
+.list[data-active-index='6'] .indicator { transform: translateY(calc(6 * 42px)); }
+.list[data-active-index='7'] .indicator { transform: translateY(calc(7 * 42px)); }
+.list[data-active-index='8'] .indicator { transform: translateY(calc(8 * 42px)); }
+
+.listItem {
+  position: relative;
+  z-index: 1;
+}
+
 .navItem {
-  border-radius: 0;
-  padding: var(--space-xs) var(--space-md);
+  display: flex;
+  align-items: center;
+  height: 40px;
+  gap: var(--space-sm);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-sm);
   color: var(--body);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.navIcon {
+  flex-shrink: 0;
+  color: var(--mute);
+  transition: color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .navItem:hover {
   background-color: var(--hairline-soft);
 }
 
+.navItem:hover .navIcon {
+  transform: translateX(2px);
+}
+
 .navItemActive {
-  background-color: var(--link-soft);
   color: var(--link);
-  box-shadow: inset 3px 0 0 0 var(--link);
+}
+
+.navItemActive:hover {
+  background-color: transparent;
+}
+
+.navItemActive .navIcon {
+  color: var(--link);
 }
 
 .navLabel {
   font-size: 14px;
+  font-weight: 500;
 }
 
 .nav {
