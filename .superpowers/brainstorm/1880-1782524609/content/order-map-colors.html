@@ -1,0 +1,83 @@
+<h2>Order Map — Route Line Colors</h2>
+<p class="subtitle">With Swiggy colors on riders (white/orange/deep-orange), how should the route lines look?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="match-rider" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Match Rider State (Recommended)</h3>
+      <p>Route line color matches the rider's current status dot — the line "belongs" to the rider visually. Leg 1 line = light orange, Leg 2 line = deep orange.</p>
+      <div style="margin-top:14px;background:#111;border-radius:8px;padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="font-size:11px;color:#fb923c;margin-bottom:5px;font-weight:600">ACCEPTED — leg 1 (rider → restaurant)</div>
+          <div style="display:flex;align-items:center;gap:0">
+            <div style="width:14px;height:14px;border-radius:50%;background:#fb923c;border:2px solid white;flex-shrink:0"></div>
+            <div style="flex:1;border-top:2.5px solid #fb923c;opacity:0.8"></div>
+            <div style="width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid white;flex-shrink:0"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#ea580c;margin-bottom:5px;font-weight:600">PICKED_UP — leg 2 (restaurant → customer)</div>
+          <div style="display:flex;align-items:center;gap:0">
+            <div style="width:14px;height:14px;border-radius:50%;background:#ea580c;border:2px solid white;flex-shrink:0"></div>
+            <div style="flex:1;border-top:2.5px solid #ea580c;opacity:0.8"></div>
+            <div style="width:12px;height:12px;border-radius:50%;background:#06b6d4;border:2px solid white;flex-shrink:0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="neutral" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Neutral White</h3>
+      <p>Single route color regardless of leg — semi-transparent white. Clean and never competes with the rider/restaurant/customer dots.</p>
+      <div style="margin-top:14px;background:#111;border-radius:8px;padding:14px 18px">
+        <div style="display:flex;align-items:center;gap:0">
+          <div style="width:14px;height:14px;border-radius:50%;background:#fb923c;border:2px solid white;flex-shrink:0"></div>
+          <div style="flex:1;border-top:2.5px solid rgba(255,255,255,0.5)"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#06b6d4;border:2px solid white;flex-shrink:0"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0;margin-top:10px">
+          <div style="width:14px;height:14px;border-radius:50%;background:#ea580c;border:2px solid white;flex-shrink:0"></div>
+          <div style="flex:1;border-top:2.5px solid rgba(255,255,255,0.5)"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#06b6d4;border:2px solid white;flex-shrink:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="destination" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Destination Color</h3>
+      <p>Line color matches <em>where the rider is going</em>: leg 1 ends at a restaurant (green line), leg 2 ends at a customer (cyan line). The line "points toward" its destination.</p>
+      <div style="margin-top:14px;background:#111;border-radius:8px;padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="font-size:11px;color:#22c55e;margin-bottom:5px;font-weight:600">Leg 1 → Restaurant</div>
+          <div style="display:flex;align-items:center;gap:0">
+            <div style="width:14px;height:14px;border-radius:50%;background:#fb923c;border:2px solid white;flex-shrink:0"></div>
+            <div style="flex:1;border-top:2.5px solid #22c55e;opacity:0.7"></div>
+            <div style="width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid white;flex-shrink:0"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#06b6d4;margin-bottom:5px;font-weight:600">Leg 2 → Customer</div>
+          <div style="display:flex;align-items:center;gap:0">
+            <div style="width:14px;height:14px;border-radius:50%;background:#ea580c;border:2px solid white;flex-shrink:0"></div>
+            <div style="flex:1;border-top:2.5px solid #06b6d4;opacity:0.7"></div>
+            <div style="width:12px;height:12px;border-radius:50%;background:#06b6d4;border:2px solid white;flex-shrink:0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:14px 16px;background:#0d1117;border:1px solid #30363d;border-radius:8px;font-size:13px;color:#8b949e">
+  <strong style="color:#e6edf3">All options keep the same pin colors:</strong>
+  &nbsp;🟢 Restaurant &nbsp;&nbsp; 🔵 Customer drop &nbsp;&nbsp; ⚫ Pending order (gray dot at restaurant)
+</div>

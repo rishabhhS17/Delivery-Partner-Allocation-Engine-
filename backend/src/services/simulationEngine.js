@@ -59,6 +59,24 @@ export function addPendingOrder(order) {
   pendingQueue.set(order._id.toString(), order);
 }
 
+// Called by allocation.js when a second order is queued for a busy rider.
+// Stores the order data so _transitionToDelivered can chain into it without
+// a DB fetch, and removes it from pendingQueue to prevent re-allocation.
+export function queueNextOrder(riderId, orderDoc) {
+  if (!running) return;
+  const rider = riderState.get(riderId.toString());
+  if (!rider) return;
+  rider.nextOrderId = orderDoc._id;
+  rider.nextOrderData = {
+    _id:           orderDoc._id,
+    restaurantLat: orderDoc.restaurantLat,
+    restaurantLng: orderDoc.restaurantLng,
+    customerLat:   orderDoc.customerLat,
+    customerLng:   orderDoc.customerLng,
+  };
+  pendingQueue.delete(orderDoc._id.toString());
+}
+
 // ─── Hydration ───────────────────────────────────────────────────────────────
 
 async function hydrate() {
@@ -152,6 +170,25 @@ async function hydrate() {
   const pending = await Order.find({ status: 'PENDING' });
   for (const ord of pending) pendingQueue.set(ord._id.toString(), ord);
 
+  // Populate nextOrderData for riders who had a queued order, and remove those
+  // orders from pendingQueue so the sim engine doesn't re-allocate them.
+  for (const [, entry] of riderState) {
+    if (!entry.nextOrderId) continue;
+    const nextOrdDoc = pendingQueue.get(entry.nextOrderId.toString());
+    if (nextOrdDoc) {
+      entry.nextOrderData = {
+        _id:           nextOrdDoc._id,
+        restaurantLat: nextOrdDoc.restaurantLat,
+        restaurantLng: nextOrdDoc.restaurantLng,
+        customerLat:   nextOrdDoc.customerLat,
+        customerLng:   nextOrdDoc.customerLng,
+      };
+      pendingQueue.delete(entry.nextOrderId.toString());
+    } else {
+      entry.nextOrderId = null;
+    }
+  }
+
   console.log(`[sim] hydrated — ${riderState.size} riders, ${pendingQueue.size} pending orders`);
 }
 
@@ -163,9 +200,14 @@ function _buildEntry(rider) {
     lng:   rider.longitude,
     h3Index: rider.h3Index,
     status:  rider.status,
+    availabilityStatus: rider.availabilityStatus,
     rating:  rider.rating,
     deliveryTimestamps: rider.deliveryTimestamps ?? [],
     currentOrderId: null,
+
+    // Queued next order (set when a second order is pre-assigned while rider is busy)
+    nextOrderId:   rider.nextOrderId ?? null,
+    nextOrderData: null,   // { _id, restaurantLat, restaurantLng, customerLat, customerLng }
 
     // Leg navigation — lerp fallback fields
     legOriginLat: null, legOriginLng: null,
@@ -221,12 +263,17 @@ function tick() {
     }
 
     tickRiders.push({
-      _id:     riderId,
-      name:    rider.name,
-      lat:     rider.lat,
-      lng:     rider.lng,
-      status:  rider.status,
-      orderId: rider.currentOrderId ? rider.currentOrderId.toString() : null,
+      _id:                riderId,
+      name:               rider.name,
+      lat:                rider.lat,
+      lng:                rider.lng,
+      status:             rider.status,
+      availabilityStatus: rider.availabilityStatus ?? 'ONLINE',
+      orderId:            rider.currentOrderId ? rider.currentOrderId.toString() : null,
+      legStepIndex:       rider.currentSegmentIdx ?? 0,
+      leg:                rider.status === 'ACCEPTED' ? 'leg1'
+                        : rider.status === 'PICKED_UP' ? 'leg2'
+                        : null,
     });
   }
 
@@ -417,42 +464,133 @@ function _transitionToPickedUp(riderId, rider, now) {
 }
 
 function _transitionToDelivered(riderId, rider, now) {
-  const orderId = rider.currentOrderId;
-  activeRoutes.delete(orderId.toString());
+  const deliveredOrderId = rider.currentOrderId;
+  activeRoutes.delete(deliveredOrderId.toString());
 
-  rider.lat    = rider.customerLat;
-  rider.lng    = rider.customerLng;
+  // Snap to delivery drop-off
+  rider.lat     = rider.customerLat;
+  rider.lng     = rider.customerLng;
   rider.h3Index = latLngToCell(rider.lat, rider.lng, H3_RESOLUTION);
-  rider.status = 'IDLE';
   rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
-  rider.currentOrderId = null;
-  rider.legStartedAt   = null; rider.legDuration_s = null;
-  rider.legOriginLat   = null; rider.legOriginLng  = null;
-  rider.legDestLat     = null; rider.legDestLng    = null;
-  rider.restaurantLat  = null; rider.restaurantLng = null;
-  rider.customerLat    = null; rider.customerLng   = null;
-  rider.leg2Duration_s = null;
+
+  // Clear current-leg fields
+  rider.currentOrderId         = null;
+  rider.legStartedAt           = null; rider.legDuration_s  = null;
+  rider.legOriginLat           = null; rider.legOriginLng   = null;
+  rider.legDestLat             = null; rider.legDestLng     = null;
+  rider.restaurantLat          = null; rider.restaurantLng  = null;
+  rider.customerLat            = null; rider.customerLng    = null;
+  rider.leg2Duration_s         = null;
   rider.legCoords              = [];
   rider.leg2Coords             = [];
   rider.currentSegmentIdx      = 0;
   rider.distanceCoveredOnSegment = 0;
 
-  _addToH3(riderId, rider.h3Index);
+  Order.findByIdAndUpdate(deliveredOrderId, {
+    status: 'DELIVERED', deliveredAt: new Date(now),
+  }).catch(err => console.error('[sim] delivered write failed:', err.message));
 
-  Promise.all([
-    Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now) }),
+  if (ioRef) ioRef.emit('order:delivered', { orderId: deliveredOrderId.toString(), riderId });
+
+  if (rider.nextOrderId && rider.nextOrderData) {
+    // ── Chain into the queued next order ──────────────────────────────────────
+    const nextId    = rider.nextOrderId;
+    const nextData  = rider.nextOrderData;
+    const nextIdStr = nextId.toString();
+    const originLat = rider.lat;
+    const originLng = rider.lng;
+
+    rider.nextOrderId   = null;
+    rider.nextOrderData = null;
+
+    const leg1Duration_s = haversine(
+      { lat: originLat,              lng: originLng              },
+      { lat: nextData.restaurantLat, lng: nextData.restaurantLng }
+    ) / RIDER_SPEED_KMH * 3600;
+
+    const leg2Duration_s = haversine(
+      { lat: nextData.restaurantLat, lng: nextData.restaurantLng },
+      { lat: nextData.customerLat,   lng: nextData.customerLng   }
+    ) / RIDER_SPEED_KMH * 3600;
+
+    rider.status         = 'ACCEPTED';
+    rider.currentOrderId = nextId;
+    rider.legOriginLat   = originLat;
+    rider.legOriginLng   = originLng;
+    rider.legDestLat     = nextData.restaurantLat;
+    rider.legDestLng     = nextData.restaurantLng;
+    rider.legStartedAt   = new Date(now);
+    rider.legDuration_s  = leg1Duration_s;
+    rider.restaurantLat  = nextData.restaurantLat;
+    rider.restaurantLng  = nextData.restaurantLng;
+    rider.customerLat    = nextData.customerLat;
+    rider.customerLng    = nextData.customerLng;
+    rider.leg2Duration_s = leg2Duration_s;
+
+    Promise.all([
+      Order.findByIdAndUpdate(nextId, {
+        status:          'ASSIGNED',
+        assignedRiderId: riderId,
+        assignedAt:      new Date(now),
+        legStartedAt:    new Date(now),
+        leg1Duration_s,
+        leg2Duration_s,
+        leg1OriginLat:   originLat,
+        leg1OriginLng:   originLng,
+      }),
+      Rider.findByIdAndUpdate(riderId, {
+        status:         'ACCEPTED',
+        currentOrderId: nextId,
+        nextOrderId:    null,
+        activeOrders:   1,
+        latitude:       rider.lat,
+        longitude:      rider.lng,
+        h3Index:        rider.h3Index,
+        $push:          { deliveryTimestamps: new Date(now) },
+      }),
+    ]).catch(err => console.error('[sim] next-order chain write failed:', err.message));
+
+    getRoute(
+      { lat: originLat,              lng: originLng              },
+      { lat: nextData.restaurantLat, lng: nextData.restaurantLng },
+      { lat: nextData.customerLat,   lng: nextData.customerLng   }
+    ).then(route => {
+      const r = riderState.get(riderId);
+      if (r && r.currentOrderId?.toString() === nextIdStr) {
+        r.legCoords              = route.leg1Coords;
+        r.leg2Coords             = route.leg2Coords;
+        r.currentSegmentIdx      = 0;
+        r.distanceCoveredOnSegment = 0;
+        r.legDuration_s          = route.leg1Duration_s;
+        r.leg2Duration_s         = route.leg2Duration_s;
+      }
+      activeRoutes.set(nextIdStr, { riderId, leg1Coords: route.leg1Coords, leg2Coords: route.leg2Coords });
+      if (ioRef) ioRef.emit('order:route', { orderId: nextIdStr, riderId, leg1Coords: route.leg1Coords, leg2Coords: route.leg2Coords });
+      Order.findByIdAndUpdate(nextId, {
+        leg1Coords:     route.leg1Coords,
+        leg2Coords:     route.leg2Coords,
+        leg1Duration_s: route.leg1Duration_s,
+        leg2Duration_s: route.leg2Duration_s,
+      }).catch(() => {});
+    }).catch(err => console.warn('[sim] next-order route fetch failed:', err.message));
+
+    if (ioRef) ioRef.emit('order:assigned', { orderId: nextIdStr, riderId, riderName: rider.name });
+
+  } else {
+    // ── No queued order — go IDLE ─────────────────────────────────────────────
+    rider.status = 'IDLE';
+    _addToH3(riderId, rider.h3Index);
+
     Rider.findByIdAndUpdate(riderId, {
-      status: 'IDLE',
+      status:         'IDLE',
       currentOrderId: null,
-      activeOrders: 0,
-      latitude:  rider.lat,
-      longitude: rider.lng,
-      h3Index:   rider.h3Index,
-      $push: { deliveryTimestamps: new Date(now) },
-    }),
-  ]).catch(err => console.error('[sim] delivered write failed:', err.message));
-
-  if (ioRef) ioRef.emit('order:delivered', { orderId: orderId.toString(), riderId });
+      activeOrders:   0,
+      latitude:       rider.lat,
+      longitude:      rider.lng,
+      h3Index:        rider.h3Index,
+      $push:          { deliveryTimestamps: new Date(now) },
+    }).catch(err => console.error('[sim] idle write failed:', err.message));
+  }
 }
 
 // ─── Polyline traversal ───────────────────────────────────────────────────────

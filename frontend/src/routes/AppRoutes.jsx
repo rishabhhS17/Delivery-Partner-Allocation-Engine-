@@ -8,6 +8,7 @@ import Restaurants from '../pages/Restaurants';
 import Customers from '../pages/Customers';
 import Orders from '../pages/Orders';
 import RiderMap from '../pages/RiderMap';
+import OrdersMap from '../pages/OrdersMap';
 import OrderMap from '../pages/OrderMap';
 import AllocationHistory from '../pages/AllocationHistory';
 import Settings from '../pages/Settings';
@@ -26,6 +27,7 @@ export default function AppRoutes() {
           <Route path="customers" element={<Customers />} />
           <Route path="orders" element={<Orders />} />
           <Route path="map/riders" element={<RiderMap />} />
+          <Route path="map/orders" element={<OrdersMap />} />
           <Route path="map/orders/:id" element={<OrderMap />} />
           <Route path="allocation-history" element={<AllocationHistory />} />
           <Route path="settings" element={<Settings />} />

@@ -1,0 +1,76 @@
+<h2>Rider Map — Enhancement Ideas</h2>
+<p class="subtitle">Route lines are being removed. Which of these additions would make the map more useful for a dispatcher?</p>
+
+<div class="options" data-multiselect>
+
+  <div class="option" data-choice="pulse" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Pulse Ring on Active Riders</h3>
+      <p>ACCEPTED and PICKED_UP riders get an animated pulsing ring around their dot — immediately visible at a glance which riders are in motion vs idle. Idle riders stay static.</p>
+      <div style="margin-top:10px;display:flex;gap:16px;align-items:center">
+        <div style="position:relative;width:28px;height:28px">
+          <div style="position:absolute;inset:0;border-radius:50%;background:#7928ca;opacity:0.25;animation:pulse-ring 1.4s ease-out infinite;transform:scale(2)"></div>
+          <div style="position:absolute;inset:4px;border-radius:50%;background:#7928ca;border:2px solid white"></div>
+        </div>
+        <span style="font-size:13px;color:var(--muted)">PICKED_UP rider with pulse</span>
+        <div style="position:relative;width:28px;height:28px">
+          <div style="position:absolute;inset:4px;border-radius:50%;background:#0070f3;border:2px solid white"></div>
+        </div>
+        <span style="font-size:13px;color:var(--muted)">IDLE rider — no pulse</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="tooltip" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Rider Click Popup</h3>
+      <p>Click any rider dot to see a popup: rider name, current status badge, active order ID (linkable), and how long they've been in that state. Closes on map click.</p>
+      <div style="margin-top:10px;background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:10px 14px;max-width:200px;font-size:12px">
+        <div style="font-weight:600;color:#fff;margin-bottom:4px">Rahul K.</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="background:#7928ca;color:white;padding:1px 7px;border-radius:999px;font-size:11px">PICKED_UP</span>
+          <span style="color:#aaa">4m 22s</span>
+        </div>
+        <div style="color:#888">Order <span style="color:#f5a623">#6A3F039B</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="stats" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Live Stats Bar on Map</h3>
+      <p>A compact overlay in the map corner showing real-time counts: Idle / Active / Offline, plus queue depth. Updates every second from socket data. No modal needed — pure at-a-glance.</p>
+      <div style="margin-top:10px;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);border-radius:8px;padding:8px 14px;max-width:260px;display:flex;gap:16px;font-size:12px;border:1px solid rgba(255,255,255,0.1)">
+        <div style="text-align:center"><div style="color:#0070f3;font-weight:700;font-size:16px">4</div><div style="color:#888">Idle</div></div>
+        <div style="text-align:center"><div style="color:#f5a623;font-weight:700;font-size:16px">2</div><div style="color:#888">Active</div></div>
+        <div style="text-align:center"><div style="color:#a1a1a1;font-weight:700;font-size:16px">1</div><div style="color:#888">Offline</div></div>
+        <div style="text-align:center"><div style="color:#e5e5e5;font-weight:700;font-size:16px">3</div><div style="color:#888">Queue</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="cluster" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Cluster Markers When Zoomed Out</h3>
+      <p>When multiple riders are near each other at low zoom, collapse them into a numbered badge ("5"). Expand on zoom-in. Mapbox has native GeoJSON clustering — minimal code, big clarity win for dense areas.</p>
+      <div style="margin-top:10px;display:flex;gap:12px;align-items:center">
+        <div style="width:36px;height:36px;border-radius:50%;background:#0070f3;border:2.5px solid white;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:14px">5</div>
+        <span style="font-size:13px;color:var(--muted)">5 riders clustered → expand on zoom</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px">You can select multiple. These are independent — all can be implemented together.</p>
+
+<style>
+@keyframes pulse-ring {
+  0% { transform: scale(1.2); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+</style>

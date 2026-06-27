@@ -1,0 +1,112 @@
+<h2>Rider Status Colors</h2>
+<p class="subtitle">Pick a color scheme for rider dots on the map. All shown on a dark map background.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="current" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Current Scheme</h3>
+      <p>Blue · Orange · Purple · Gray</p>
+      <div style="margin-top:12px;display:flex;gap:20px;align-items:center">
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#0070f3;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">IDLE</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#f5a623;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">ACCEPTED</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#7928ca;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">PICKED_UP</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#a1a1a1;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">OFFLINE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="traffic" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Traffic Light</h3>
+      <p>Green · Amber · Red · Gray — intuitive: green = free, amber = on the way, red = busy delivering</p>
+      <div style="margin-top:12px;display:flex;gap:20px;align-items:center">
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#22c55e;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">IDLE</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#f59e0b;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">ACCEPTED</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#ef4444;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">PICKED_UP</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#6b7280;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">OFFLINE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="neon" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Neon on Dark</h3>
+      <p>Cyan · Yellow · Magenta · Gray — high contrast, pops on Mapbox dark-v11, feels more "ops dashboard"</p>
+      <div style="margin-top:12px;display:flex;gap:20px;align-items:center">
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#06b6d4;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">IDLE</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#facc15;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">ACCEPTED</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#e879f9;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">PICKED_UP</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#6b7280;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">OFFLINE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="swiggy" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Swiggy-Inspired</h3>
+      <p>White · Orange · Deep Orange · Gray — monochrome idle, orange progression as rider gets busier</p>
+      <div style="margin-top:12px;display:flex;gap:20px;align-items:center">
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#ffffff;border:2px solid #555;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">IDLE</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#fb923c;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">ACCEPTED</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#ea580c;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">PICKED_UP</span>
+        </div>
+        <div style="text-align:center">
+          <div style="width:22px;height:22px;border-radius:50%;background:#6b7280;border:2px solid white;margin:0 auto 4px"></div>
+          <span style="font-size:11px;color:#aaa">OFFLINE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Note: green is already used for restaurant pins — avoid it for rider states to prevent confusion.</p>
