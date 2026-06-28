@@ -1,0 +1,10 @@
+.mapWrap {
+  width: 100%;
+  height: 500px;
+}
+
+.liveEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}

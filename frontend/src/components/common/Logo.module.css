@@ -1,0 +1,66 @@
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.mark {
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 0 transparent);
+}
+
+.mark[data-animated='true'] {
+  animation: glow 5s var(--ease-out) infinite;
+}
+
+.stroke {
+  stroke: var(--link);
+  fill: none;
+  stroke-dasharray: 26;
+}
+
+.mark[data-animated='true'] .stroke {
+  animation: draw 5s var(--ease-out) infinite;
+}
+
+.dot {
+  fill: var(--link);
+  transform-origin: 25px 21px;
+}
+
+.mark[data-animated='true'] .dot {
+  animation: pulse 5s var(--ease-out) infinite;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.lockup[data-size='sm'] .mark { width: 20px; height: 20px; }
+.lockup[data-size='sm'] .wordmark { font-size: 15px; }
+
+.lockup[data-size='md'] .mark { width: 28px; height: 28px; }
+.lockup[data-size='md'] .wordmark { font-size: 19px; }
+
+.lockup[data-size='lg'] .mark { width: 40px; height: 40px; }
+.lockup[data-size='lg'] .wordmark { font-size: 28px; }
+
+/* Subtle: dash barely retreats/advances, dot barely breathes, glow is a whisper. */
+@keyframes draw {
+  0%, 100% { stroke-dashoffset: 0; }
+  50%      { stroke-dashoffset: 6; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 0px var(--link)); }
+  50%      { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--link) 55%, transparent)); }
+}

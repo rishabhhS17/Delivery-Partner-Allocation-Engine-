@@ -44,11 +44,15 @@
   background-color: var(--faint);
 }
 
-.legendDot[data-color='link'] { background-color: var(--link); }
-.legendDot[data-color='warning'] { background-color: var(--warning); }
-.legendDot[data-color='violet'] { background-color: var(--violet); }
-.legendDot[data-color='error'] { background-color: var(--error); }
-.legendDot[data-color='faint'] { background-color: var(--faint); }
+.legendDot[data-color='link']       { background-color: var(--link); }
+.legendDot[data-color='warning']    { background-color: var(--warning); }
+.legendDot[data-color='violet']     { background-color: var(--violet); }
+.legendDot[data-color='error']      { background-color: var(--error); }
+.legendDot[data-color='faint']      { background-color: var(--faint); }
+.legendDot[data-color='restaurant'] { background-color: #22c55e; }
+.legendDot[data-color='customer']   { background-color: var(--info); }
+.legendDot[data-color='riderIdle']   { background-color: #ffffff; border: 1.5px solid #555; }
+.legendDot[data-color='riderPickup'] { background-color: #ea580c; }
 
 .legendLabel {
   font-size: 13px;

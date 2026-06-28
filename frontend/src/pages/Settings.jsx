@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardContent, Alert, TextField, Button } from '@mui/material';
 import PageHeader from '../components/common/PageHeader';
+import Spinner from '../components/common/Spinner';
+import { useToast } from '../context/ToastContext';
 import { getWeights, setWeights as saveWeights } from '../api/endpoints';
 import styles from './Settings.module.css';
 
@@ -15,6 +17,7 @@ export default function Settings() {
   const [inputs, setInputs]     = useState({ etar: '0.5', rating: '0.3', load: '0.2' });
   const [saving, setSaving]     = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
+  const toast = useToast();
 
   useEffect(() => {
     getWeights()
@@ -53,8 +56,10 @@ export default function Settings() {
         load:   String(normalized.load),
       });
       setSaveStatus('saved');
+      toast.success('Weights updated');
     } catch {
       setSaveStatus('error');
+      toast.error('Failed to save weights');
     }
     setSaving(false);
   };
@@ -62,7 +67,6 @@ export default function Settings() {
   return (
     <Box>
       <PageHeader
-        eyebrow="Ops — Config"
         title="Settings"
         description="System configuration and allocation parameters."
       />
@@ -104,7 +108,7 @@ export default function Settings() {
           disabled={saving}
           className={styles.saveBtn}
         >
-          {saving ? 'Saving…' : 'Save weights'}
+          {saving ? <Spinner size="sm" /> : 'Save weights'}
         </Button>
         {saveStatus === 'saved' && (
           <Typography className={styles.savedText}>Weights updated</Typography>

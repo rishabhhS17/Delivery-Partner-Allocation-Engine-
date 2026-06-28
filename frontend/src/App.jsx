@@ -5,6 +5,7 @@ import createAppTheme from './theme/theme';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { SimulationProvider } from './context/SimulationContext';
+import { ToastProvider } from './context/ToastContext';
 import AppRoutes from './routes/AppRoutes';
 
 function AppContent() {
@@ -15,11 +16,13 @@ function AppContent() {
     <MuiThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-        <AuthProvider>
-          <SimulationProvider>
-            <AppRoutes />
-          </SimulationProvider>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <SimulationProvider>
+              <AppRoutes />
+            </SimulationProvider>
+          </AuthProvider>
+        </ToastProvider>
       </BrowserRouter>
     </MuiThemeProvider>
   );

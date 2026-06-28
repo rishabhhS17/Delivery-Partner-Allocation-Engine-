@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Box, Card, Typography, TextField, Button } from '@mui/material';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Spinner from '../components/common/Spinner';
+import Logo from '../components/common/Logo';
 import styles from './Login.module.css';
 
 export default function Login() {
@@ -34,8 +36,8 @@ export default function Login() {
     <Box className={styles.hero}>
       <Card elevation={0} className={styles.card}>
         <Box>
-          <Typography className={styles.eyebrow}>Ops — Sign in</Typography>
-          <Typography variant="h2" className={styles.title}>Allocation Engine</Typography>
+          <Logo variant="full" size="lg" className={styles.title} />
+          <Typography className={styles.tagline}>AI-Powered Delivery Intelligence</Typography>
         </Box>
 
         <form className={styles.form} onSubmit={handleSubmit}>
@@ -64,7 +66,7 @@ export default function Login() {
             disabled={submitting}
             className={styles.submit}
           >
-            {submitting ? 'Signing in…' : 'Log in'}
+            {submitting ? <Spinner size="sm" /> : 'Log in'}
           </Button>
         </form>
       </Card>

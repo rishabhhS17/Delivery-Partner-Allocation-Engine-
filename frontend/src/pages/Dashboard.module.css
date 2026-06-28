@@ -1,18 +1,127 @@
-.statGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-lg);
+.hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--hairline);
+  background-color: var(--surface);
+  padding: var(--space-xl);
   margin-bottom: var(--space-xl);
 }
 
+.heroGlow {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--link) 18%, transparent) 0%, transparent 55%),
+    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--violet) 14%, transparent) 0%, transparent 55%);
+  animation: ambient-breathe 8s var(--ease-out) infinite;
+}
+
+.heroBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+@keyframes ambient-breathe {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+.route {
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.route[data-variant='link']   { stroke: var(--link); opacity: 0.16; }
+.route[data-variant='violet'] { stroke: var(--violet); opacity: 0.14; }
+.route[data-variant='info']   { stroke: var(--info); opacity: 0.16; }
+
+.routeDot[data-variant='link']   { fill: var(--link); }
+.routeDot[data-variant='violet'] { fill: var(--violet); }
+.routeDot[data-variant='info']   { fill: var(--info); }
+
+@media (prefers-reduced-motion: reduce) {
+  .routeDot {
+    display: none;
+  }
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitle {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  color: var(--ink);
+  margin: 0;
+  transition: color 200ms var(--ease-out), letter-spacing 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+
+.heroTitle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 100%;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--link), var(--violet));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms var(--ease-out);
+}
+
+.heroTitle:hover {
+  color: var(--link);
+  letter-spacing: -1.9px; /* base h1 tracking is -2.4px — "increase by 0.5px" */
+  transform: translateY(-1px);
+}
+
+.heroTitle:hover::after {
+  transform: scaleX(1);
+}
+
+.heroSubtitle {
+  color: var(--body);
+  margin-top: var(--space-xs);
+  max-width: 480px;
+}
+
+.heroStats {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) auto;
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
+  align-items: stretch;
+}
+
+.heroRing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hairline);
+  background-color: var(--hairline-soft);
+}
+
 @media (max-width: 1023px) {
-  .statGrid {
+  .heroStats {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 599px) {
-  .statGrid {
+  .heroStats {
     grid-template-columns: 1fr;
   }
 }
@@ -27,6 +136,12 @@
   .lowerGrid {
     grid-template-columns: 1fr;
   }
+}
+
+.liveEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 
 .activityCard {
@@ -65,6 +180,17 @@
   border-bottom: none;
 }
 
+/* Plays once on mount — since each new live allocation prepends a freshly-keyed item, this
+   naturally flashes the new entry without re-triggering on the existing ones below it. */
+.flashIn {
+  animation: flash-in 1.2s var(--ease-out);
+}
+
+@keyframes flash-in {
+  from { background-color: var(--success-soft); }
+  to   { background-color: transparent; }
+}
+
 .allocationRight {
   text-align: right;
 }
@@ -85,5 +211,5 @@
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--link);
-  font-weight: 500;
+  font-weight: 600;
 }

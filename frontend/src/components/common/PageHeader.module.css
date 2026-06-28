@@ -13,19 +13,37 @@
   gap: var(--space-xxs);
 }
 
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mute);
-  margin-bottom: var(--space-xxs);
-}
-
 .title {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
   color: var(--ink);
   margin: 0;
+  transition: color 200ms var(--ease-out), letter-spacing 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+
+.title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--link), var(--violet));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms var(--ease-out);
+}
+
+.title:hover {
+  color: var(--link);
+  letter-spacing: -0.78px; /* base h2 tracking is -1.28px — "increase by 0.5px" */
+  transform: translateY(-1px);
+}
+
+.title:hover::after {
+  transform: scaleX(1);
 }
 
 .description {

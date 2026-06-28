@@ -1,11 +1,13 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Card, Typography } from '@mui/material';
+import { Activity } from 'lucide-react';
 import Map, { Source, Layer } from 'react-map-gl';
-import PageHeader from '../components/common/PageHeader';
 import StatCard from '../components/common/StatCard';
 import MapPanel from '../components/common/MapPanel';
 import EmptyState from '../components/common/EmptyState';
+import LiveDot from '../components/common/LiveDot';
+import ProgressRing from '../components/common/ProgressRing';
 import { getAnalytics } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './Dashboard.module.css';
@@ -44,12 +46,17 @@ function timeAgo(ts) {
 
 export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
+  const [analyticsStatus, setAnalyticsStatus] = useState('loading'); // loading | ready | error
   const { riders, connected, queueDepth, allocations } = useSimulation();
 
   useEffect(() => {
-    getAnalytics()
-      .then((res) => setAnalytics(res.data))
-      .catch(() => setAnalytics(null));
+    const load = () =>
+      getAnalytics()
+        .then((res) => { setAnalytics(res.data); setAnalyticsStatus('ready'); })
+        .catch(() => { setAnalytics(null); setAnalyticsStatus('error'); });
+    load();
+    const id = setInterval(load, 10_000);
+    return () => clearInterval(id);
   }, []);
 
   const geojson = useMemo(() => ({
@@ -61,28 +68,71 @@ export default function Dashboard() {
     })),
   }), [riders]);
 
+  // undefined → StatCard renders a skeleton (still loading); null → StatCard renders '—' (loaded/errored, no value)
+  const statValue = (key) => (analyticsStatus === 'loading' ? undefined : analytics?.[key] ?? null);
+
   const stats = [
-    { label: 'Total riders',     value: analytics?.totalRiders },
-    { label: 'Available riders', value: analytics?.availableRiders },
-    { label: 'Active orders',    value: analytics?.activeOrders },
-    { label: 'Completed orders', value: analytics?.completedOrders },
+    { label: 'Total riders',     value: statValue('totalRiders') },
+    { label: 'Active orders',    value: statValue('activeOrders') },
+    { label: 'Completed orders', value: statValue('completedOrders') },
   ];
+
+  const totalRiders     = analytics?.totalRiders ?? 0;
+  const availableRiders = analytics?.availableRiders ?? 0;
+  const availablePercent = totalRiders > 0 ? Math.round((availableRiders / totalRiders) * 100) : 0;
 
   return (
     <Box>
-      <PageHeader
-        eyebrow="Ops — Overview"
-        title="Dashboard"
-        description="Real-time overview of fleet utilization and order throughput."
-      />
+      <Box className={styles.hero}>
+        <div className={styles.heroGlow} aria-hidden="true" />
+        <svg className={styles.heroBg} viewBox="0 0 800 220" preserveAspectRatio="none" aria-hidden="true">
+          <path id="route-1" className={styles.route} data-variant="link" d="M -20,160 C 120,40 280,220 440,90 S 680,30 860,110" />
+          <path id="route-2" className={styles.route} data-variant="violet" d="M -20,50 C 160,190 320,20 480,150 S 700,60 860,190" />
+          <path id="route-3" className={styles.route} data-variant="info" d="M -20,110 C 200,10 360,200 520,70 S 760,150 860,40" />
 
-      <Box className={styles.statGrid}>
-        {stats.map((s) => <StatCard key={s.label} label={s.label} value={s.value} />)}
+          <circle className={styles.routeDot} data-variant="link" r="3.5">
+            <animateMotion dur="9s" repeatCount="indefinite">
+              <mpath href="#route-1" />
+            </animateMotion>
+          </circle>
+          <circle className={styles.routeDot} data-variant="violet" r="3.5">
+            <animateMotion dur="12s" repeatCount="indefinite" begin="1s">
+              <mpath href="#route-2" />
+            </animateMotion>
+          </circle>
+          <circle className={styles.routeDot} data-variant="info" r="3.5">
+            <animateMotion dur="10.5s" repeatCount="indefinite" begin="2s">
+              <mpath href="#route-3" />
+            </animateMotion>
+          </circle>
+        </svg>
+
+        <Box className={styles.heroContent}>
+          <Typography variant="h1" className={styles.heroTitle}>Live Delivery Intelligence</Typography>
+          <Typography className={styles.heroSubtitle}>AI-Powered Delivery Intelligence</Typography>
+        </Box>
+
+        <Box className={styles.heroStats}>
+          {stats.map((s) => <StatCard key={s.label} label={s.label} value={s.value} />)}
+          <Box className={styles.heroRing}>
+            <ProgressRing
+              percent={availablePercent}
+              label={analyticsStatus === 'loading' ? '—' : availableRiders}
+              sublabel="Available"
+              color="success"
+            />
+          </Box>
+        </Box>
       </Box>
 
       <Box className={styles.lowerGrid}>
         <MapPanel
-          eyebrow={connected ? `Fleet — Live · Queue: ${queueDepth}` : 'Fleet — Waiting for simulation…'}
+          eyebrow={
+            <span className={styles.liveEyebrow}>
+              <LiveDot active={connected} />
+              {connected ? `Fleet — Live · Queue: ${queueDepth}` : 'Fleet — Waiting for simulation…'}
+            </span>
+          }
           legend={[
             { label: 'Idle',      color: 'link' },
             { label: 'Accepted',  color: 'warning' },
@@ -109,13 +159,14 @@ export default function Dashboard() {
 
           {allocations.length === 0 ? (
             <EmptyState
+              icon={Activity}
               title="No recent allocations"
-              description="Allocation events will appear here once the simulation is running."
+              description="No recent allocations yet. They will appear here in real time."
             />
           ) : (
             <div className={styles.allocationFeed}>
               {allocations.slice(0, 8).map((a) => (
-                <div key={a.orderId + a.ts} className={styles.allocationItem}>
+                <div key={a.orderId + a.ts} className={`${styles.allocationItem} ${styles.flashIn}`}>
                   <div>
                     <div className={styles.allocationRider}>
                       Rider {String(a.riderId).slice(-6)}

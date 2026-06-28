@@ -1,0 +1,51 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.svg {
+  transform: rotate(-90deg);
+}
+
+.track {
+  stroke: var(--hairline);
+}
+
+.progress {
+  stroke: var(--link);
+  transition: stroke-dashoffset var(--duration-base) var(--ease-out);
+}
+
+.progress[data-color='success'] { stroke: var(--success); }
+.progress[data-color='warning'] { stroke: var(--warning); }
+.progress[data-color='violet']  { stroke: var(--violet); }
+.progress[data-color='info']    { stroke: var(--info); }
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.sublabel {
+  font-size: 9px;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}

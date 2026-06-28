@@ -23,18 +23,14 @@
   background-color: var(--surface);
 }
 
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mute);
+.title {
+  margin-top: var(--space-xs);
 }
 
-.title {
-  color: var(--ink);
-  margin: 0;
+.tagline {
+  font-size: 13px;
+  color: var(--body);
+  margin-top: var(--space-xxs);
 }
 
 .form {

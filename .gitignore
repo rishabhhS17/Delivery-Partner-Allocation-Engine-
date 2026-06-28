@@ -6,3 +6,12 @@ build/
 CLAUDE.md
 screenshots/
 .playwright-mcp/
+.superpowers/
+*.log
+verify-*.png
+rider-map-phase2.png
+post-restart-*.jpeg
+ordermap-trimmed-route.jpeg
+frontend/UI_IMPLEMENTATION_LOG.md
+/docs/SIMULATION_LOGIC_EXPLANATION.MD
+/docs/bugs.md
