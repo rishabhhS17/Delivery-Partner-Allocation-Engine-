@@ -22,6 +22,19 @@ io.on('connection', (socket) => {
 
 const PORT = config.port;
 
+// Free the port cleanly on nodemon restart so EADDRINUSE never occurs
+const shutdown = () => httpServer.close(() => process.exit(0));
+process.on('SIGTERM', shutdown);
+process.on('SIGINT',  shutdown);
+
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[server] Port ${PORT} is already in use — is another instance running?`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startSimulation().catch(console.error);

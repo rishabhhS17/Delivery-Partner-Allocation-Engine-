@@ -135,8 +135,61 @@ async function _healOrphanedRiders() {
   ]);
 }
 
+// FIX: Two classes of orphaned orders that the rider-side healer misses:
+//
+// 1. ASSIGNED orders with no active rider — happens when the DB write to mark a rider
+//    ACCEPTED succeeds but the server restarts before the order gets picked up. The rider
+//    reloads as IDLE (currentOrderId null) so _healOrphanedRiders never sees it, but the
+//    order stays ASSIGNED with no one delivering it. Re-queue these as PENDING.
+//
+// 2. PICKED_UP orders whose rider is now IDLE — _transitionToDelivered fires a DB write
+//    to mark the order DELIVERED, but if that write fails silently the order stays stuck
+//    as PICKED_UP forever. Since we can't confirm delivery, mark these CANCELLED.
+async function _healOrphanedOrders() {
+  // ── Part 1: orphaned ASSIGNED orders ──────────────────────────────────────
+  const assignedOrders = await Order.find({ status: 'ASSIGNED' }).lean();
+  if (assignedOrders.length) {
+    const riderIds    = [...new Set(assignedOrders.map(o => o.assignedRiderId?.toString()).filter(Boolean))];
+    const activeRiders = await Rider.find({ _id: { $in: riderIds }, status: 'ACCEPTED' })
+      .select('_id currentOrderId').lean();
+    const riderOrderMap = new Map(activeRiders.map(r => [r._id.toString(), r.currentOrderId?.toString()]));
+
+    const toRequeue = assignedOrders.filter(o => {
+      const rid = o.assignedRiderId?.toString();
+      return !rid || riderOrderMap.get(rid) !== o._id.toString();
+    });
+
+    if (toRequeue.length) {
+      console.warn(`[sim] re-queuing ${toRequeue.length} orphaned ASSIGNED order(s) → PENDING`);
+      await Order.updateMany(
+        { _id: { $in: toRequeue.map(o => o._id) } },
+        { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
+      );
+    }
+  }
+
+  // ── Part 2: stuck PICKED_UP orders ────────────────────────────────────────
+  const stuck = await Order.find({ status: 'PICKED_UP' }).lean();
+  if (!stuck.length) return;
+
+  const pickupRiderIds = [...new Set(stuck.map(o => o.assignedRiderId?.toString()).filter(Boolean))];
+  const activePickup   = await Rider.find({ _id: { $in: pickupRiderIds }, status: 'PICKED_UP' })
+    .select('_id').lean();
+  const activePickupSet = new Set(activePickup.map(r => r._id.toString()));
+
+  const toCancel = stuck.filter(o => !activePickupSet.has(o.assignedRiderId?.toString()));
+  if (!toCancel.length) return;
+
+  console.warn(`[sim] cancelling ${toCancel.length} stuck PICKED_UP order(s)`);
+  await Order.updateMany(
+    { _id: { $in: toCancel.map(o => o._id) } },
+    { $set: { status: 'CANCELLED', cancelledAt: new Date() } }
+  );
+}
+
 async function hydrate() {
   await _healOrphanedRiders();
+  await _healOrphanedOrders();
 
   riderState.clear();
   h3Buckets.clear();
@@ -253,10 +306,12 @@ async function hydrate() {
 
 function _buildEntry(rider) {
   return {
-    _id:   rider._id,
-    name:  rider.name,
-    lat:   rider.latitude,
-    lng:   rider.longitude,
+    _id:     rider._id,
+    name:    rider.name,
+    lat:     rider.latitude,
+    lng:     rider.longitude,
+    homeLat: rider.latitude,
+    homeLng: rider.longitude,
     h3Index: rider.h3Index,
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
@@ -647,16 +702,19 @@ function _transitionToDelivered(riderId, rider, now) {
     }
 
   } else {
-    // ── No queued order — go IDLE ─────────────────────────────────────────────
-    rider.status = 'IDLE';
+    // ── No queued order — go IDLE, return rider to home position ─────────────
+    rider.status  = 'IDLE';
+    rider.lat     = rider.homeLat;
+    rider.lng     = rider.homeLng;
+    rider.h3Index = latLngToCell(rider.homeLat, rider.homeLng, H3_RESOLUTION);
     _addToH3(riderId, rider.h3Index);
 
     Rider.findByIdAndUpdate(riderId, {
       status:         'IDLE',
       currentOrderId: null,
       activeOrders:   0,
-      latitude:       rider.lat,
-      longitude:      rider.lng,
+      latitude:       rider.homeLat,
+      longitude:      rider.homeLng,
       h3Index:        rider.h3Index,
       $push:          { deliveryTimestamps: new Date(now) },
     }).catch(err => console.error('[sim] idle write failed:', err.message));

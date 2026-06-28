@@ -19,7 +19,7 @@ const circleLayer = {
   type: 'circle',
   filter: ['!', ['has', 'point_count']],
   paint: {
-    'circle-radius': 9,
+    'circle-radius': 6,
     'circle-color': [
       'match', ['get', 'status'],
       'IDLE',      '#ffffff',
@@ -49,29 +49,30 @@ const pulseLayer = {
     ['match', ['get', 'status'], ['ACCEPTED', 'PICKED_UP'], true, false],
   ],
   paint: {
-    'circle-radius':       10,
-    'circle-color':        'transparent',
+    'circle-radius':         6,
+    'circle-color':          'transparent',
     'circle-stroke-color': [
       'match', ['get', 'status'],
       'ACCEPTED',  '#fb923c',
       'PICKED_UP', '#ea580c',
       '#fb923c',
     ],
-    'circle-stroke-width': 2,
-    'circle-opacity':      0.6,
+    'circle-stroke-width':   2,
+    'circle-stroke-opacity': 0.7,
   },
 };
+
 
 const clusterCircleLayer = {
   id:     'clusters',
   type:   'circle',
   filter: ['has', 'point_count'],
   paint: {
-    'circle-radius': ['step', ['get', 'point_count'], 18, 5, 24, 10, 30],
-    'circle-color':  '#fb923c',
+    'circle-color':        '#fb923c',
+    'circle-radius':       16,
     'circle-stroke-color': '#1a1a1a',
     'circle-stroke-width': 1.5,
-    'circle-opacity': 0.9,
+    'circle-opacity':      0.9,
   },
 };
 
@@ -80,13 +81,11 @@ const clusterCountLayer = {
   type:   'symbol',
   filter: ['has', 'point_count'],
   layout: {
-    'text-field':  ['get', 'point_count_abbreviated'],
-    'text-size':   13,
-    'text-font':   ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+    'text-field': '{point_count_abbreviated}',
+    'text-size':  12,
+    'text-font':  ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
   },
-  paint: {
-    'text-color': '#1a1a1a',
-  },
+  paint: { 'text-color': '#ffffff' },
 };
 
 const restaurantLayer = {
@@ -121,11 +120,11 @@ export default function RiderMap() {
     let rafId;
     const animate = (ts) => {
       const t = (ts % 1400) / 1400;
-      const radius  = 10 + t * 16;
-      const opacity = 0.65 * (1 - t);
+      const radius  = 6 + t * 18;
+      const opacity = 0.7 * (1 - t);
       if (map.getLayer('riders-pulse')) {
-        map.setPaintProperty('riders-pulse', 'circle-radius',  radius);
-        map.setPaintProperty('riders-pulse', 'circle-opacity', opacity);
+        map.setPaintProperty('riders-pulse', 'circle-radius',         radius);
+        map.setPaintProperty('riders-pulse', 'circle-stroke-opacity', opacity);
       }
       rafId = requestAnimationFrame(animate);
     };
@@ -145,32 +144,24 @@ export default function RiderMap() {
   }, []);
 
   const handleMapClick = useCallback((e) => {
-    const features = e.features ?? [];
-    const clusterFeature = features.find((f) => f.layer.id === 'clusters');
-    const riderFeature   = features.find((f) => f.layer.id === 'unclustered-riders');
-
+    const clusterFeature = (e.features ?? []).find((f) => f.layer.id === 'clusters');
     if (clusterFeature) {
-      const map    = mapRef.current?.getMap();
+      const map = mapRef.current?.getMap();
       const source = map?.getSource('riders');
-      source?.getClusterExpansionZoom(
-        clusterFeature.properties.cluster_id,
-        (err, zoom) => {
-          if (err) return;
-          map.easeTo({ center: clusterFeature.geometry.coordinates, zoom });
-        }
-      );
-      setPopup(null);
+      source?.getClusterExpansionZoom(clusterFeature.properties.cluster_id, (err, zoom) => {
+        if (err) return;
+        map.easeTo({ center: clusterFeature.geometry.coordinates, zoom });
+      });
       return;
     }
-
+    const riderFeature = (e.features ?? []).find((f) => f.layer.id === 'unclustered-riders');
     if (riderFeature) {
       const { name, status, orderId } = riderFeature.properties;
       const [lng, lat] = riderFeature.geometry.coordinates;
       setPopup({ lng, lat, name, status, orderId });
-      return;
+    } else {
+      setPopup(null);
     }
-
-    setPopup(null);
   }, []);
 
   const riderGeojson = useMemo(() => ({
@@ -262,19 +253,12 @@ export default function RiderMap() {
             mapStyle={MAP_STYLE}
             onClick={handleMapClick}
             onZoomEnd={() => setPopup(null)}
-            interactiveLayerIds={['unclustered-riders', 'clusters']}
+            interactiveLayerIds={['clusters', 'unclustered-riders']}
           >
             <Source id="restaurants" type="geojson" data={restaurantGeojson}>
               <Layer {...restaurantLayer} />
             </Source>
-            <Source
-              id="riders"
-              type="geojson"
-              data={riderGeojson}
-              cluster={true}
-              clusterMaxZoom={14}
-              clusterRadius={50}
-            >
+            <Source id="riders" type="geojson" data={riderGeojson} cluster={true} clusterMaxZoom={14} clusterRadius={50}>
               <Layer {...clusterCircleLayer} />
               <Layer {...clusterCountLayer} />
               <Layer {...pulseLayer} />

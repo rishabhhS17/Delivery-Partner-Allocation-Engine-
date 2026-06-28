@@ -33,17 +33,16 @@ const RESTAURANTS = [
 ];
 
 // ─── Riders (9) ──────────────────────────────────────────────────────────────
-// Placed at different intersections so H3 allocation radius picks multiple candidates
 const RIDERS = [
-  { name: 'Krrish',    latitude: 23.3500, longitude: 85.3150 },
-  { name: 'Daksh',     latitude: 23.3370, longitude: 85.3320 },
-  { name: 'Aviral',    latitude: 23.3445, longitude: 85.3420 },
-  { name: 'Ajitesh',   latitude: 23.3295, longitude: 85.3260 },
-  { name: 'Rishabh',   latitude: 23.3555, longitude: 85.3400 },
-  { name: 'Rishi',     latitude: 23.3310, longitude: 85.3480 },
-  { name: 'Manav',     latitude: 23.3490, longitude: 85.3070 },
-  { name: 'Sunny',     latitude: 23.3380, longitude: 85.3510 },
-  { name: 'Sreyannsh', latitude: 23.3430, longitude: 85.3250 },
+  { name: 'Krrish',    latitude: 23.4146, longitude: 85.4409 }, // BIT Mesra
+  { name: 'Daksh',     latitude: 23.3750, longitude: 85.3680 }, // BIT Mod
+  { name: 'Aviral',    latitude: 23.3413, longitude: 85.3422 }, // Lalpur
+  { name: 'Ajitesh',   latitude: 23.3620, longitude: 85.3450 }, // Chutia
+  { name: 'Rishabh',   latitude: 23.2630, longitude: 85.5340 }, // Hundru Falls
+  { name: 'Rishi',     latitude: 26.8467, longitude: 80.9462 }, // Lucknow
+  { name: 'Manav',     latitude: 25.4358, longitude: 81.8463 }, // Allahabad
+  { name: 'Sunny',     latitude: 23.3900, longitude: 85.3050 }, // Kanke
+  { name: 'Sreyannsh', latitude: 23.3390, longitude: 85.3210 }, // Harmu
 ];
 
 // ─── Customers (13) ──────────────────────────────────────────────────────────

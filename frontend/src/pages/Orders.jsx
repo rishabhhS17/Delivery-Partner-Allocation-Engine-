@@ -139,7 +139,7 @@ export default function Orders() {
                 <TableCell>{o.restaurantName}</TableCell>
                 <TableCell>{o.customerName}</TableCell>
                 <TableCell><StatusBadge kind="order" status={o.status} /></TableCell>
-                <TableCell>{o.assignedRiderId ?? '—'}</TableCell>
+                <TableCell>{o.assignedRiderId?.name ?? '—'}</TableCell>
                 <TableCell>{o.createdAt ? new Date(o.createdAt).toLocaleString() : '—'}</TableCell>
                 <TableCell>
                   <Button size="small" startIcon={<MapPin size={14} />} onClick={() => navigate(`/map/orders/${o._id}`)}>Map</Button>

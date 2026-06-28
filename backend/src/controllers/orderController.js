@@ -32,7 +32,7 @@ export const getAllOrders = async (req, res, next) => {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const orders = await Order.find(filter).sort({ createdAt: -1 });
+    const orders = await Order.find(filter).sort({ createdAt: -1 }).populate('assignedRiderId', 'name');
     res.json({ success: true, data: orders });
   } catch (err) {
     next(err);
