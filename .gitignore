@@ -7,6 +7,7 @@ CLAUDE.md
 screenshots/
 .playwright-mcp/
 .superpowers/
+.worktrees/
 *.log
 verify-*.png
 rider-map-phase2.png
