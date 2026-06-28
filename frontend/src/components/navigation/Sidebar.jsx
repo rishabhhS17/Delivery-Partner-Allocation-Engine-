@@ -6,15 +6,13 @@ import styles from './Sidebar.module.css';
 
 export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const location = useLocation();
-  const activeIndex = NAVIGATION_ITEMS.findIndex((item) => location.pathname.startsWith(item.path));
 
   const drawerContent = (
     <div>
       <Toolbar>
         <Logo variant="full" size="sm" className={styles.wordmark} />
       </Toolbar>
-      <List disablePadding className={styles.list} data-active-index={activeIndex}>
-        <span className={styles.indicator} aria-hidden="true" />
+      <List disablePadding className={styles.list}>
         {NAVIGATION_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path);
           const Icon = item.icon;
@@ -23,12 +21,14 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
               <ListItemButton
                 component={NavLink}
                 to={item.path}
+                disableRipple
                 onClick={handleDrawerToggle ? () => handleDrawerToggle(false) : undefined}
                 className={`${styles.navItem} ${isActive ? styles.navItemActive : ''}`}
               >
                 {Icon && <Icon size={18} className={styles.navIcon} />}
                 <ListItemText
                   primary={item.label}
+                  className={styles.navText}
                   primaryTypographyProps={{ className: styles.navLabel }}
                 />
               </ListItemButton>
