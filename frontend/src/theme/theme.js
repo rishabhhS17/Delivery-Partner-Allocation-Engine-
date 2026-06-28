@@ -174,6 +174,12 @@ const createAppTheme = (isDark = false) => createTheme({
         // which always applies after the base styles — the permanent 240px sidebar needs this to
         // reliably make room instead of rendering full-width underneath it.
         root: {
+          // The global MuiPaper override gives every Paper a 12px radius + a full border.
+          // For the fixed top bar that means rounded corners and a stray left border butting
+          // against the sidebar's right border — square it off and keep only the bottom hairline.
+          borderRadius: 0,
+          border: 'none',
+          borderBottom: `1px solid ${isDark ? '#30363d' : '#e7e4df'}`,
           transition: 'background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out)',
           '@media (min-width: 600px)': {
             width: 'calc(100% - 240px)',
@@ -185,6 +191,12 @@ const createAppTheme = (isDark = false) => createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
+          // Same reason as MuiAppBar: drop the inherited Paper radius + full border so the
+          // sidebar reads as a flush panel with only its right hairline, meeting the top bar
+          // in a clean corner instead of two rounded edges.
+          borderRadius: 0,
+          border: 'none',
+          borderRight: `1px solid ${isDark ? '#30363d' : '#e7e4df'}`,
           transition: 'background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out)',
         },
       },

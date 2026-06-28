@@ -3,22 +3,19 @@ import { createContext, useContext, useState, useEffect } from 'react';
 const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    return dark;
+  });
 
   // Load theme preference from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('theme');
-    if (saved) {
-      setIsDark(saved === 'dark');
-      document.documentElement.setAttribute('data-theme', saved);
-    } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setIsDark(prefersDark);
-      if (prefersDark) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      }
-    }
+    const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setIsDark(dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   }, []);
 
   // Save theme preference to localStorage and update HTML

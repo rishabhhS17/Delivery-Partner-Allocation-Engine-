@@ -6,7 +6,7 @@
   can read intent (--color-text-primary) instead of a raw hue (--ink). Nothing below renames or
   removes an existing primitive — every current .module.css reference keeps working unchanged.
 */
-:root {
+:root, html[data-theme="light"] {
   /* colors — light mode (default): warm, soft-on-the-eyes neutrals, not stark pure white */
   --ink: #171717;
   --body: #4d4d4d;
@@ -134,7 +134,7 @@
 
 /* Dark mode — deep charcoal, not absolute black; three distinct elevation tiers */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ink: #e6edf3;
     --body: #8b949e;
     --mute: #6e7681;
