@@ -56,36 +56,8 @@
 }
 
 .heroTitle {
-  position: relative;
-  display: inline-block;
-  width: fit-content;
   color: var(--ink);
   margin: 0;
-  transition: color 200ms var(--ease-out), letter-spacing 200ms var(--ease-out), transform 200ms var(--ease-out);
-}
-
-.heroTitle::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -6px;
-  width: 100%;
-  height: 2px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, var(--link), var(--violet));
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 200ms var(--ease-out);
-}
-
-.heroTitle:hover {
-  color: var(--link);
-  letter-spacing: -1.9px; /* base h1 tracking is -2.4px — "increase by 0.5px" */
-  transform: translateY(-1px);
-}
-
-.heroTitle:hover::after {
-  transform: scaleX(1);
 }
 
 .heroSubtitle {
