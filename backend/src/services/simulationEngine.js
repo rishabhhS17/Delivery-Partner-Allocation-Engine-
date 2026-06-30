@@ -11,6 +11,7 @@ import { haversine } from '../utils/haversine.js';
 import Rider from '../models/Rider.js';
 import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
+import { startAutoOrderJob, stopAutoOrderJob } from './orderGenerator.js';
 
 // ─── In-memory state ─────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ export async function startSimulation() {
   await hydrate();
   running   = true;
   tickTimer = setInterval(tick, TICK_INTERVAL_MS);
+  startAutoOrderJob();
   if (ioRef) ioRef.emit('simulation:status', { running: true });
   console.log('[sim] started');
 }
@@ -54,6 +56,7 @@ export async function stopSimulation() {
   clearInterval(tickTimer);
   tickTimer = null;
   running   = false;
+  stopAutoOrderJob();
 
   // Flush current in-memory state to DB so restarts always have a clean baseline.
   const writes = [];
@@ -99,6 +102,18 @@ export function queueNextOrder(riderId, orderDoc) {
     customerLng:   orderDoc.customerLng,
   };
   pendingQueue.delete(orderDoc._id.toString());
+}
+
+// Sync in-memory state after a manual IDLE allocation so the next tick
+// doesn't see the rider as available and double-assign them.
+export function syncManualAllocation(riderId, orderId) {
+  const id = riderId.toString();
+  const rider = riderState.get(id);
+  if (!rider) return; // sim not running — DB writes already happened
+  _removeFromH3(id, rider.h3Index);
+  rider.status = 'ACCEPTED';
+  rider.currentOrderId = orderId;
+  pendingQueue.delete(orderId.toString());
 }
 
 // ─── Hydration ───────────────────────────────────────────────────────────────
