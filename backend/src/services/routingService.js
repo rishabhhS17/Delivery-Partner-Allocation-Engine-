@@ -14,20 +14,37 @@ export async function getRoute(riderCoords, restaurantCoords, customerCoords) {
 
   const url = `${MAPBOX_BASE}/${waypoints}?geometries=geojson&steps=true&access_token=${config.mapboxToken}`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Mapbox Directions error: ${res.status}`);
-  const data = await res.json();
+  // Abort the request if Mapbox doesn't respond within 10s so a hung upstream
+  // never stalls the simulation tick — callers fall back to lerp on rejection.
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), 10_000);
 
-  if (!data.routes?.length) throw new Error('No route returned from Mapbox');
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Mapbox Directions error: ${res.status}`);
+    const data = await res.json();
 
-  const [leg1, leg2] = data.routes[0].legs;
+    if (!data.routes?.length) throw new Error('No route returned from Mapbox');
 
-  return {
-    leg1Coords:     _extractCoords(leg1),
-    leg2Coords:     _extractCoords(leg2),
-    leg1Duration_s: Math.round(leg1.duration),
-    leg2Duration_s: Math.round(leg2.duration),
-  };
+    const [leg1, leg2] = data.routes[0].legs;
+
+    return {
+      leg1Coords:     _extractCoords(leg1),
+      leg2Coords:     _extractCoords(leg2),
+      leg1Duration_s: Math.round(leg1.duration),
+      leg2Duration_s: Math.round(leg2.duration),
+    };
+  } catch (err) {
+    console.warn('[routing] getRoute failed:', {
+      rider:      riderCoords,
+      restaurant: restaurantCoords,
+      customer:   customerCoords,
+      error:      controller.signal.aborted ? 'request timed out after 10s' : err.message,
+    });
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function _extractCoords(leg) {
