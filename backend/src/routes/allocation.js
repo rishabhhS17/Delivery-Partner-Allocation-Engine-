@@ -30,14 +30,18 @@ router.post('/allocate', async (req, res, next) => {
       h3Index: { $in: candidateCells },
     }).populate('currentOrderId');
 
-    const result = allocateOrder(order, candidates, getWeights());
+    // Only score IDLE riders — busy riders can produce a non-finite ETAR and the
+    // manual path mirrors the simulation tick, which assigns to IDLE riders only.
+    const idleCandidates = candidates.filter(c => c.status === 'IDLE');
+
+    const result = allocateOrder(order, idleCandidates, getWeights());
 
     if (!result) {
       return res.json({
         assigned: false,
         message: 'No eligible riders in range — order stays PENDING',
         orderId,
-        candidatesConsidered: candidates.length,
+        candidatesConsidered: idleCandidates.length,
       });
     }
 
