@@ -28,16 +28,22 @@
   position: relative;
 }
 
+.markerWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .pinRestaurant,
-.pinCustomer,
-.pinRider {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-pill);
-  border: 2px solid #ffffff;
-  box-shadow: var(--shadow-sm);
+.pinCustomer {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28), 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .pinRestaurant { background: var(--warning); }
 .pinCustomer   { background: var(--violet); }
-.pinRider      { background: var(--link); }

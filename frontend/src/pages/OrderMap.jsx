@@ -4,6 +4,8 @@ import { useParams } from 'react-router-dom';
 import { Box, Button } from '@mui/material';
 import { RefreshCw } from 'lucide-react';
 import Map, { Source, Layer, Marker } from 'react-map-gl';
+import MarkerLabel from '../components/map/MarkerLabel.jsx';
+import RiderMarker from '../components/map/RiderMarker.jsx';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
 import StatusBadge from '../components/common/StatusBadge';
@@ -13,7 +15,7 @@ import { getOrder } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './OrderMap.module.css';
 
-const MAPBOX_TOKEN   = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || import.meta.env.VITE_MAPBOX_TOKEN || '';
+const MAPBOX_TOKEN   = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const MAP_STYLE      = 'mapbox://styles/mapbox/dark-v11';
 const RANCHI_DEFAULT = { longitude: 85.33, latitude: 23.35, zoom: 13 };
 
@@ -29,19 +31,28 @@ const leg2LineLayer = {
   paint: { 'line-color': '#7928ca', 'line-width': 3, 'line-opacity': 0.85 },
 };
 
+const riderConnectorLayer = {
+  id:   'rider-connector',
+  type: 'line',
+  paint: {
+    'line-color':     ['get', 'color'],
+    'line-width':     2,
+    'line-opacity':   0.55,
+    'line-dasharray': [2, 2.5],
+  },
+};
+
 export default function OrderMap() {
-  const mapRef = useRef(null);
+  const mapRef          = useRef(null);
   const mapContainerRef = useRef(null);
-  const { id } = useParams();
-  const [order, setOrder] = useState(null);
-  const [status, setStatus] = useState('loading'); // loading | ready | error
-  const { riders } = useSimulation();
+  const { id }          = useParams();
+  const [order, setOrder]   = useState(null);
+  const [status, setStatus] = useState('loading');
+  const { riders, routes }  = useSimulation();
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
-    const observer = new ResizeObserver(() => {
-      mapRef.current?.resize();
-    });
+    const observer = new ResizeObserver(() => { mapRef.current?.resize(); });
     observer.observe(mapContainerRef.current);
     return () => observer.disconnect();
   }, []);
@@ -63,12 +74,13 @@ export default function OrderMap() {
 
   const assignedRider = useMemo(
     () => riders.find((r) => r.orderId === id),
-    [riders, id]
+    [riders, id],
   );
 
   const leg1Geojson = useMemo(() => {
     if (!order || order.status !== 'ASSIGNED') return { type: 'FeatureCollection', features: [] };
-    const full    = order.leg1Coords ?? [];
+    const live    = routes.get(id);
+    const full    = live?.leg1Coords ?? order.leg1Coords ?? [];
     const stepIdx = assignedRider?.legStepIndex ?? 0;
     const coords  = full.slice(stepIdx);
     return {
@@ -77,11 +89,12 @@ export default function OrderMap() {
         ? [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }]
         : [],
     };
-  }, [order, assignedRider]);
+  }, [order, assignedRider, routes, id]);
 
   const leg2Geojson = useMemo(() => {
     if (!order) return { type: 'FeatureCollection', features: [] };
-    const full    = order.leg2Coords ?? [];
+    const live    = routes.get(id);
+    const full    = live?.leg2Coords ?? order.leg2Coords ?? [];
     const stepIdx = order.status === 'PICKED_UP' ? (assignedRider?.legStepIndex ?? 0) : 0;
     const coords  = full.slice(stepIdx);
     return {
@@ -90,7 +103,29 @@ export default function OrderMap() {
         ? [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }]
         : [],
     };
-  }, [order, assignedRider]);
+  }, [order, assignedRider, routes, id]);
+
+  const riderConnectorGeojson = useMemo(() => {
+    if (!assignedRider || !order) return { type: 'FeatureCollection', features: [] };
+    let dest, color;
+    if (order.status === 'ASSIGNED') {
+      dest  = [order.restaurantLng, order.restaurantLat];
+      color = '#f5a623';
+    } else if (order.status === 'PICKED_UP') {
+      dest  = [order.customerLng, order.customerLat];
+      color = '#7928ca';
+    } else {
+      return { type: 'FeatureCollection', features: [] };
+    }
+    return {
+      type: 'FeatureCollection',
+      features: [{
+        type:       'Feature',
+        geometry:   { type: 'LineString', coordinates: [[assignedRider.lng, assignedRider.lat], dest] },
+        properties: { color },
+      }],
+    };
+  }, [assignedRider, order]);
 
   const initialView = order
     ? { longitude: order.restaurantLng, latitude: order.restaurantLat, zoom: 13 }
@@ -107,64 +142,73 @@ export default function OrderMap() {
       <div className={styles.mapPanelWrap}>
         <MapPanel
           eyebrow="Route — Live remaining path"
-        legend={[
-          { label: 'To restaurant', color: 'warning' },
-          { label: 'To customer',   color: 'violet'  },
-          { label: 'Rider',         color: 'link'    },
-        ]}
-        variant="full"
-      >
-        <div className={styles.mapWrap} ref={mapContainerRef}>
-          {status === 'loading' && <Skeleton shape="block" />}
+          legend={[
+            { label: 'To restaurant', color: 'warning' },
+            { label: 'To customer',   color: 'violet'  },
+            { label: 'Rider',         color: 'link'    },
+          ]}
+          variant="full"
+        >
+          <div className={styles.mapWrap} ref={mapContainerRef}>
+            {status === 'loading' && <Skeleton shape="block" />}
 
-          {status === 'error' && (
-            <EmptyState
-              title="Could not load this order"
-              description="The backend isn’t reachable yet — this will resolve once it’s live."
-              action={
-                <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={fetchOrder}>
-                  Retry
-                </Button>
-              }
-            />
-          )}
+            {status === 'error' && (
+              <EmptyState
+                title="Could not load this order"
+                description="The backend isn't reachable yet — this will resolve once it's live."
+                action={
+                  <Button size="small" variant="outlined" startIcon={<RefreshCw size={14} />} onClick={fetchOrder}>
+                    Retry
+                  </Button>
+                }
+              />
+            )}
 
-          {status === 'ready' && (
-            <Map
-              ref={mapRef}
-              mapboxAccessToken={MAPBOX_TOKEN}
-              initialViewState={initialView}
-              mapStyle={MAP_STYLE}
-              style={{ width: '100%', height: '100%' }}
-            >
-              <Source id="order-leg1" type="geojson" data={leg1Geojson}>
-                <Layer {...leg1LineLayer} />
-              </Source>
-              <Source id="order-leg2" type="geojson" data={leg2Geojson}>
-                <Layer {...leg2LineLayer} />
-              </Source>
+            {status === 'ready' && (
+              <Map
+                ref={mapRef}
+                mapboxAccessToken={MAPBOX_TOKEN}
+                initialViewState={initialView}
+                mapStyle={MAP_STYLE}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <Source id="order-leg1" type="geojson" data={leg1Geojson}>
+                  <Layer {...leg1LineLayer} />
+                </Source>
+                <Source id="order-leg2" type="geojson" data={leg2Geojson}>
+                  <Layer {...leg2LineLayer} />
+                </Source>
+                <Source id="rider-connector" type="geojson" data={riderConnectorGeojson}>
+                  <Layer {...riderConnectorLayer} />
+                </Source>
 
-              {order && (
-                <Marker longitude={order.restaurantLng} latitude={order.restaurantLat} anchor="center">
-                  <div className={styles.pinRestaurant} />
-                </Marker>
-              )}
+                {order && (
+                  <Marker longitude={order.restaurantLng} latitude={order.restaurantLat} anchor="center">
+                    <div className={styles.markerWrap}>
+                      <MarkerLabel label={order.restaurantName ?? 'Restaurant'} />
+                      <div className={styles.pinRestaurant} />
+                    </div>
+                  </Marker>
+                )}
 
-              {order && (
-                <Marker longitude={order.customerLng} latitude={order.customerLat} anchor="center">
-                  <div className={styles.pinCustomer} />
-                </Marker>
-              )}
+                {order && (
+                  <Marker longitude={order.customerLng} latitude={order.customerLat} anchor="center">
+                    <div className={styles.markerWrap}>
+                      <MarkerLabel label={order.customerName ?? 'Customer'} />
+                      <div className={styles.pinCustomer} />
+                    </div>
+                  </Marker>
+                )}
 
-              {assignedRider && (
-                <Marker longitude={assignedRider.lng} latitude={assignedRider.lat} anchor="center">
-                  <div className={styles.pinRider} />
-                </Marker>
-              )}
-            </Map>
-          )}
-        </div>
-      </MapPanel>
+                {assignedRider && (
+                  <Marker longitude={assignedRider.lng} latitude={assignedRider.lat} anchor="center">
+                    <RiderMarker rider={assignedRider} />
+                  </Marker>
+                )}
+              </Map>
+            )}
+          </div>
+        </MapPanel>
       </div>
     </Box>
   );

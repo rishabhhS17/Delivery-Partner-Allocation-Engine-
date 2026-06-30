@@ -100,10 +100,23 @@
 .heroStats {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
   align-items: stretch;
-  gap: var(--space-md);
-  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 1023px) {
+  .heroStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 599px) {
+  .heroStats {
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+  }
 }
 
 .heroStats > * {

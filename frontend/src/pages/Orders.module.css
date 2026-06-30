@@ -4,9 +4,20 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
+  align-items: center;
 }
 
 .bulkCount {
   width: 80px;
+}
+
+@media (max-width: 599px) {
+  .actions {
+    width: 100%;
+  }
+  .bulkCount {
+    width: 64px;
+  }
 }
