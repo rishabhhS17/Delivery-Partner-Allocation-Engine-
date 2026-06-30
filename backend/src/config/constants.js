@@ -1,5 +1,5 @@
 export const H3_RESOLUTION          = 7;
-export const H3_CANDIDATE_K         = 10;
+export const H3_CANDIDATE_K         = 20;
 export const H3_SERVICE_AREA_K      = 5;
 
 export const RIDER_SPEED_KMH        = 40;
