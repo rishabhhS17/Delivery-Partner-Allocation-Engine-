@@ -82,7 +82,7 @@ export function allocateOrder(order, candidates, weights) {
   };
 }
 
-function computeEtar(rider, restaurantCoords, now) {
+export function computeEtar(rider, restaurantCoords, now) {
   let timeToFree = 0;
 
   if (rider.status !== 'IDLE') {
@@ -108,5 +108,8 @@ function computeEtar(rider, restaurantCoords, now) {
     RIDER_SPEED_KMH *
     3600;
 
-  return timeToFree + travelTime_s;
+  // Guard against NaN/Infinity (e.g. a busy rider with a missing leg duration) —
+  // a non-finite ETAR must rank the rider last, never poison the comparison.
+  const etar = timeToFree + travelTime_s;
+  return Number.isFinite(etar) ? etar : Infinity;
 }
