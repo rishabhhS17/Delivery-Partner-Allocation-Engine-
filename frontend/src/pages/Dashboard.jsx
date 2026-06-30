@@ -1,8 +1,9 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Box, Card, Typography } from '@mui/material';
 import { Activity } from 'lucide-react';
 import Map, { Source, Layer } from 'react-map-gl';
+import { addLabelPillImage, makeLabelLayer } from '../components/map/mapLabels.js';
 import StatCard from '../components/common/StatCard';
 import MapPanel from '../components/common/MapPanel';
 import EmptyState from '../components/common/EmptyState';
@@ -15,6 +16,15 @@ import styles from './Dashboard.module.css';
 const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const RANCHI_CENTER = { longitude: 85.33, latitude: 23.35, zoom: 12 };
 const MAP_STYLE     = 'mapbox://styles/mapbox/dark-v11';
+
+// Mini-map label layer — only appears when zoomed in (minZoom 14)
+// so the compact view stays uncluttered at the default zoom 12
+const miniLabelLayer = makeLabelLayer({
+  id:        'riders-mini-labels',
+  source:    'riders-mini',
+  textField: ['get', 'name'],
+  minZoom:   14,
+});
 
 const circleLayer = {
   id:   'riders-mini',
@@ -75,9 +85,14 @@ export default function Dashboard() {
     features: riders.map((r) => ({
       type:       'Feature',
       geometry:   { type: 'Point', coordinates: [r.lng, r.lat] },
-      properties: { status: r.status, availabilityStatus: r.availabilityStatus },
+      properties: { name: r.name ?? '', status: r.status, availabilityStatus: r.availabilityStatus },
     })),
   }), [riders]);
+
+  const handleMiniMapLoad = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (map) addLabelPillImage(map);
+  }, []);
 
   // undefined → StatCard renders a skeleton (still loading); null → StatCard renders '—' (loaded/errored, no value)
   const statValue = (key) => (analyticsStatus === 'loading' ? undefined : analytics?.[key] ?? null);
@@ -161,9 +176,11 @@ export default function Dashboard() {
               initialViewState={RANCHI_CENTER}
               mapStyle={MAP_STYLE}
               style={{ width: '100%', height: '100%' }}
+              onLoad={handleMiniMapLoad}
             >
               <Source id="riders-mini" type="geojson" data={geojson}>
                 <Layer {...circleLayer} />
+                <Layer {...miniLabelLayer} />
               </Source>
             </Map>
           </div>

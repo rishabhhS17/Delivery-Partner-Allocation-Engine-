@@ -1,0 +1,135 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+.root[data-clickable='true'] { cursor: pointer; }
+
+/* ─── Label ──────────────────────────────── */
+
+.label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 8px;
+  padding: 4px 9px 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  animation: labelIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.orderId {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  color: #111111;
+  letter-spacing: 0.04em;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusText {
+  font-size: 10px;
+  color: #555555;
+  font-weight: 500;
+}
+
+/* ─── Pin ────────────────────────────────── */
+
+.pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 200ms ease;
+}
+
+/* ─── Status colors ──────────────────────── */
+
+.root[data-status='pending']   .pin { background: #f97316; }
+.root[data-status='assigned']  .pin { background: #0070f3; }
+.root[data-status='pickedup']  .pin { background: #7c3aed; }
+.root[data-status='delivered'] .pin { background: #22c55e; opacity: 0.6; }
+.root[data-status='cancelled'] .pin { background: #ef4444; opacity: 0.5; }
+
+.root[data-status='pending']   .dot { background: #f97316; }
+.root[data-status='assigned']  .dot { background: #0070f3; }
+.root[data-status='pickedup']  .dot { background: #7c3aed; }
+.root[data-status='delivered'] .dot { background: #22c55e; }
+.root[data-status='cancelled'] .dot { background: #ef4444; }
+
+/* ─── Pulse (PENDING) ────────────────────── */
+
+@keyframes pendingPulse {
+  0%   { box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 0 0   rgba(249, 115, 22, 0.55); }
+  70%  { box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 0 10px rgba(249, 115, 22, 0);   }
+  100% { box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 0 0   rgba(249, 115, 22, 0);    }
+}
+
+.root[data-status='pending'] .pin {
+  animation: pendingPulse 2s ease-out infinite;
+}
+
+/* ─── Glow ring (ASSIGNED) ───────────────── */
+
+.root[data-status='assigned'] .pin {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(0, 112, 243, 0.4);
+}
+
+/* ─── Hover ──────────────────────────────── */
+
+.root[data-clickable='true']:hover .pin {
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.root[data-clickable='true']:hover .label {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+/* ─── Keyframes ──────────────────────────── */
+
+@keyframes labelIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}

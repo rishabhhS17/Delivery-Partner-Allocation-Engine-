@@ -53,11 +53,16 @@ export async function bulkCreateOrders(count) {
 }
 
 let autoOrderTimer = null;
+let onOrderCreated = null;
 
-export function startAutoOrderJob() {
+export function startAutoOrderJob(onCreate) {
   if (autoOrderTimer) return;
-  autoOrderTimer = setInterval(() => {
-    createOrder().catch(() => {});
+  onOrderCreated = onCreate ?? null;
+  autoOrderTimer = setInterval(async () => {
+    try {
+      const order = await createOrder();
+      onOrderCreated?.(order);
+    } catch {}
   }, AUTO_ORDER_INTERVAL_MS);
 }
 

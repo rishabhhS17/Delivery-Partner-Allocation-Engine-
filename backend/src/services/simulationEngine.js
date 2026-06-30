@@ -46,7 +46,7 @@ export async function startSimulation() {
   await hydrate();
   running   = true;
   tickTimer = setInterval(tick, TICK_INTERVAL_MS);
-  startAutoOrderJob();
+  startAutoOrderJob(addPendingOrder);
   if (ioRef) ioRef.emit('simulation:status', { running: true });
   console.log('[sim] started');
 }
@@ -327,7 +327,7 @@ function _buildEntry(rider) {
     lng:     rider.longitude,
     homeLat: rider.latitude,
     homeLng: rider.longitude,
-    h3Index: rider.h3Index,
+    h3Index: rider.h3Index ?? latLngToCell(rider.latitude, rider.longitude, H3_RESOLUTION),
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
     rating:  rider.rating,
