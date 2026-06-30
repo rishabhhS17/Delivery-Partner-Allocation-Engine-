@@ -86,8 +86,8 @@ export default function Orders() {
         }
       />
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table>
+      <TableContainer component={Paper} elevation={0} sx={{ overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 620 }}>
           <TableHead>
             <TableRow>
               <TableCell>Restaurant</TableCell>

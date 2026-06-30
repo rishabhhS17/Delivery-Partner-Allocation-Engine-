@@ -98,6 +98,25 @@
   box-shadow: var(--shadow-md);
 }
 
+@media (max-width: 599px) {
+  .statsOverlay {
+    top: var(--space-xs);
+    right: var(--space-xs);
+    left: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    justify-content: space-around;
+  }
+  .statValue {
+    font-size: 15px !important;
+  }
+  .statLabel {
+    font-size: 9px;
+  }
+  .statItem {
+    padding: 0 6px;
+  }
+}
+
 .statItem {
   display: flex;
   flex-direction: column;

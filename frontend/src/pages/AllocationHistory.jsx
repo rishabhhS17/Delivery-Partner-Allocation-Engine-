@@ -48,8 +48,8 @@ export default function AllocationHistory() {
         The winner is always the highest-scoring eligible rider — no randomness, no AI in the decision loop.
       </Alert>
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table>
+      <TableContainer component={Paper} elevation={0} sx={{ overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 580 }}>
           <TableHead>
             <TableRow>
               <TableCell>Order</TableCell>

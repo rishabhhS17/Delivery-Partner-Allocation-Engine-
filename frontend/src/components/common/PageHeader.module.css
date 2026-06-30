@@ -7,6 +7,17 @@
   margin-bottom: var(--space-xl);
 }
 
+@media (max-width: 599px) {
+  .header {
+    margin-bottom: var(--space-md);
+    gap: var(--space-sm);
+  }
+  .action {
+    width: 100%;
+    flex-shrink: 1;
+  }
+}
+
 .titleBlock {
   display: flex;
   flex-direction: column;

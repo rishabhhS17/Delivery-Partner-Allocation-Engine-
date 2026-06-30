@@ -23,6 +23,12 @@
   animation: fade-in var(--duration-base) var(--ease-out);
 }
 
+@media (max-width: 599px) {
+  .content {
+    padding: var(--space-sm);
+  }
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }

@@ -77,8 +77,8 @@ export default function Restaurants() {
         }
       />
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table>
+      <TableContainer component={Paper} elevation={0} sx={{ overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 500 }}>
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>

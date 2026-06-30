@@ -12,7 +12,7 @@ import { getAnalytics } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './Dashboard.module.css';
 
-const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || import.meta.env.VITE_MAPBOX_TOKEN || '';
+const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const RANCHI_CENTER = { longitude: 85.33, latitude: 23.35, zoom: 12 };
 const MAP_STYLE     = 'mapbox://styles/mapbox/dark-v11';
 
