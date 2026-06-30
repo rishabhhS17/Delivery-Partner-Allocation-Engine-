@@ -81,6 +81,12 @@ export function getStatus() {
   return { running, riderCount: riderState.size, queueDepth: pendingQueue.size };
 }
 
+// Whether the simulation loop is currently active. Used by the order route to
+// reject live order creation while the simulation is stopped.
+export function isSimulationRunning() {
+  return running;
+}
+
 export function addPendingOrder(order) {
   if (!running) return;
   pendingQueue.set(order._id.toString(), order);
