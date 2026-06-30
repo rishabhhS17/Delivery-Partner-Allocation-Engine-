@@ -1,9 +1,15 @@
 import Order from '../models/Order.js';
 import { createOrder, bulkCreateOrders } from '../services/orderGenerator.js';
-import { addPendingOrder } from '../services/simulationEngine.js';
+import { addPendingOrder, isSimulationRunning } from '../services/simulationEngine.js';
 
 export const createSingleOrder = async (req, res, next) => {
   try {
+    if (!isSimulationRunning()) {
+      return res.status(409).json({
+        success: false,
+        message: 'Simulation is currently stopped. Start simulation before creating live orders.',
+      });
+    }
     const order = await createOrder();
     addPendingOrder(order);
     res.status(201).json({ success: true, data: order });
