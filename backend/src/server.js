@@ -1,5 +1,6 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
@@ -9,11 +10,25 @@ await connectDB();
 
 const httpServer = createServer(app);
 
+const allowedOrigins = [config.frontendUrl, 'http://localhost:3000', 'http://localhost:5173'];
+
 const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
 });
 
 initSimulation(io);
+
+// Authenticate every socket connection via JWT in the handshake before it connects.
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('Authentication required'));
+  try {
+    socket.user = jwt.verify(token, config.jwtSecret);
+    next();
+  } catch {
+    next(new Error('Invalid token'));
+  }
+});
 
 io.on('connection', (socket) => {
   console.log('[ws] client connected:', socket.id);
