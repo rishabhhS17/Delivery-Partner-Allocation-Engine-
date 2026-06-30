@@ -13,7 +13,8 @@ export function SimulationProvider({ children }) {
   const [routes, setRoutes]           = useState(new Map());
 
   useEffect(() => {
-    const socket = io(WS_URL, { transports: ['websocket'] });
+    const token  = localStorage.getItem('token');
+    const socket = io(WS_URL, { transports: ['websocket'], auth: { token } });
 
     socket.on('connect',    () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
