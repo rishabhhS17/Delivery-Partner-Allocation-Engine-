@@ -19,6 +19,22 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(mongoSanitize());
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many login attempts, please try again after 15 minutes' },
+});
 
 // Session needed for OAuth 2.0 state handshake; not used for API auth (JWT Bearer)
 app.use(session({
@@ -31,7 +47,8 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use('/api', routes);
+app.use('/api/auth/login', loginLimiter);
+app.use('/api', apiLimiter, routes);
 
 app.use(notFound);
 app.use(errorHandler);
