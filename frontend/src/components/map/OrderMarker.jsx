@@ -2,14 +2,6 @@ import { memo, useCallback } from 'react';
 import { Package } from 'lucide-react';
 import styles from './OrderMarker.module.css';
 
-const STATUS_LABELS = {
-  pending:   'Pending',
-  assigned:  'Assigned',
-  pickedup:  'Picked Up',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-};
-
 function normalizeStatus(status) {
   return (status ?? 'pending').toLowerCase().replace(/_/g, '');
 }
@@ -18,9 +10,10 @@ function shortId(id) {
   return (id?.toString() ?? '').slice(-6).toUpperCase() || '??????';
 }
 
-const OrderMarker = memo(function OrderMarker({ order, onClick }) {
-  const status  = normalizeStatus(order?.status);
-  const orderId = `#${shortId(order?._id)}`;
+const OrderMarker = memo(function OrderMarker({ order, onClick, riderName }) {
+  const status         = normalizeStatus(order?.status);
+  const orderId        = `#${shortId(order?._id)}`;
+  const restaurantName = order?.restaurantName ?? null;
 
   const handleClick = useCallback(() => onClick?.(order), [onClick, order]);
   const handleKey   = useCallback(
@@ -39,11 +32,20 @@ const OrderMarker = memo(function OrderMarker({ order, onClick }) {
       tabIndex={onClick ? 0 : undefined}
     >
       <div className={styles.label}>
-        <span className={styles.orderId}>{orderId}</span>
-        <div className={styles.statusRow}>
+        <div className={styles.titleRow}>
+          <span className={styles.orderId}>{orderId}</span>
           <span className={styles.dot} />
-          <span className={styles.statusText}>{STATUS_LABELS[status] ?? order?.status}</span>
         </div>
+        <div className={styles.infoRow}>
+          <span className={styles.key}>Rider</span>
+          <span className={styles.val}>{riderName ?? 'Unassigned'}</span>
+        </div>
+        {restaurantName && (
+          <div className={styles.infoRow}>
+            <span className={styles.key}>Restaurant</span>
+            <span className={styles.val}>{restaurantName}</span>
+          </div>
+        )}
       </div>
 
       <div className={styles.pin}>

@@ -1,7 +1,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Box } from '@mui/material';
-import MapGL, { Source, Layer, Marker } from 'react-map-gl';
+import MapGL, { Source, Layer, Marker, Popup } from 'react-map-gl';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
 import LiveDot from '../components/common/LiveDot';
@@ -52,8 +52,9 @@ export default function OrdersMap() {
   const mapRef          = useRef(null);
   const mapContainerRef = useRef(null);
   const { riders, routes, connected } = useSimulation();
-  const [orders, setOrders]           = useState([]);
-  const [restaurants, setRestaurants] = useState([]);
+  const [orders, setOrders]               = useState([]);
+  const [restaurants, setRestaurants]     = useState([]);
+  const [hoveredRestaurant, setHoveredRestaurant] = useState(null);
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -81,6 +82,27 @@ export default function OrdersMap() {
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (map) addLabelPillImage(map);
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    const feat = e.features?.[0];
+    const map  = mapRef.current?.getMap();
+    if (feat) {
+      if (map) map.getCanvas().style.cursor = 'pointer';
+      const [lng, lat] = feat.geometry.coordinates;
+      setHoveredRestaurant((prev) =>
+        prev?.name === feat.properties.name ? prev : { name: feat.properties.name, lng, lat },
+      );
+    } else {
+      if (map) map.getCanvas().style.cursor = '';
+      setHoveredRestaurant((prev) => (prev ? null : prev));
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (map) map.getCanvas().style.cursor = '';
+    setHoveredRestaurant(null);
   }, []);
 
   const activeOrders = useMemo(
@@ -192,6 +214,9 @@ export default function OrdersMap() {
               mapStyle={MAP_STYLE}
               style={{ width: '100%', height: '100%' }}
               onLoad={handleLoad}
+              interactiveLayerIds={['map-restaurants']}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
             >
               <Source id="leg1-routes" type="geojson" data={leg1Geojson}>
                 <Layer {...leg1LineLayer} />
@@ -217,7 +242,10 @@ export default function OrdersMap() {
               {/* In-transit orders at customer drop-off point */}
               {customerOrders.map((o) => (
                 <Marker key={`customer-${o._id}`} longitude={o.customerLng} latitude={o.customerLat} anchor="center">
-                  <OrderMarker order={o} />
+                  <OrderMarker
+                    order={o}
+                    riderName={riderByOrder.get(o._id?.toString())?.name}
+                  />
                 </Marker>
               ))}
 
@@ -227,6 +255,19 @@ export default function OrdersMap() {
                   <RiderMarker rider={r} />
                 </Marker>
               ))}
+
+              {hoveredRestaurant && (
+                <Popup
+                  longitude={hoveredRestaurant.lng}
+                  latitude={hoveredRestaurant.lat}
+                  closeButton={false}
+                  anchor="bottom"
+                  offset={[0, -6]}
+                  className={styles.restaurantTooltip}
+                >
+                  <span className={styles.restaurantTooltipName}>{hoveredRestaurant.name}</span>
+                </Popup>
+              )}
             </MapGL>
           </div>
         </MapPanel>
