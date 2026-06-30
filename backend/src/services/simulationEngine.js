@@ -349,7 +349,7 @@ function tick() {
 
   // Phase 1 — advance positions + detect leg completions
   for (const [riderId, rider] of riderState) {
-    if (rider.status !== 'IDLE' && rider.legStartedAt && rider.legDuration_s) {
+    if (rider.status !== 'IDLE' && rider.legStartedAt && rider.legDuration_s != null) {
       let legComplete;
 
       if (rider.legCoords.length >= 2) {
