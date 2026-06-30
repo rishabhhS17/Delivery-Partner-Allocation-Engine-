@@ -45,8 +45,9 @@ export async function bulkCreateOrders(count) {
     try {
       const order = await createOrder();
       created.push(order);
-    } catch {
+    } catch (err) {
       // skip — no eligible customer found for this attempt
+      console.error('[orderGen] bulk order creation failed:', { attempt: i, error: err.message });
     }
   }
   return created;
@@ -62,7 +63,9 @@ export function startAutoOrderJob(onCreate) {
     try {
       const order = await createOrder();
       onOrderCreated?.(order);
-    } catch {}
+    } catch (err) {
+      console.error('[orderGen] auto order creation failed:', { error: err.message });
+    }
   }, AUTO_ORDER_INTERVAL_MS);
 }
 

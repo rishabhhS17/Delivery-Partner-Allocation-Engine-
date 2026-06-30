@@ -599,7 +599,12 @@ function _transitionToPickedUp(riderId, rider, now) {
     // Explicitly re-affirm currentOrderId here so this write is idempotent even
     // if the earlier ASSIGNED write failed silently (the primary cause of stuck riders).
     Rider.findByIdAndUpdate(riderId, { status: 'PICKED_UP', currentOrderId: orderId }),
-  ]).catch(err => console.error('[sim] pickup write failed:', err.message));
+  ]).catch(err => console.error('[sim] DB write failed:', {
+    transition: 'PICKED_UP',
+    orderId,
+    riderId,
+    error: err.message,
+  }));
 
   if (ioRef) ioRef.emit('order:status', { orderId: orderId.toString(), status: 'PICKED_UP', riderId });
 }
@@ -629,7 +634,12 @@ function _transitionToDelivered(riderId, rider, now) {
 
   Order.findByIdAndUpdate(deliveredOrderId, {
     status: 'DELIVERED', deliveredAt: new Date(now),
-  }).catch(err => console.error('[sim] delivered write failed:', err.message));
+  }).catch(err => console.error('[sim] DB write failed:', {
+    transition: 'DELIVERED',
+    orderId: deliveredOrderId,
+    riderId,
+    error: err.message,
+  }));
 
   if (ioRef) ioRef.emit('order:delivered', { orderId: deliveredOrderId.toString(), riderId });
 
