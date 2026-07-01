@@ -21,8 +21,8 @@ export const deleteCustomer = (id)   => api.delete(`/customers/${id}`);
 // Orders
 export const getOrders  = (params) => api.get('/orders', { params }).then(r => ({ data: r.data?.data ?? r.data }));
 export const getOrder   = (id)     => api.get(`/orders/${id}`);
-export const createOrder  = ()       => api.post('/orders');
-export const bulkOrders   = (count)  => api.post('/orders/bulk', { count });
+export const createOrder  = (key) => api.post('/orders', {}, key ? { headers: { 'X-Idempotency-Key': key } } : {});
+export const bulkOrders   = (count, key) => api.post('/orders/bulk', { count }, key ? { headers: { 'X-Idempotency-Key': key } } : {});
 
 // Allocation
 export const allocateOrder       = (orderId) => api.post('/allocation/allocate', { orderId });
@@ -33,4 +33,4 @@ export const getWeights = ()     => api.get('/config/weights');
 export const setWeights = (body) => api.put('/config/weights', body);
 
 // Analytics
-export const getAnalytics = () => api.get('/analytics');
+export const getAnalytics = (opts = {}) => api.get('/analytics', opts);

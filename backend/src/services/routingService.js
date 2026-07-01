@@ -1,9 +1,22 @@
 import { config } from '../config/env.js';
 
 const MAPBOX_BASE = 'https://api.mapbox.com/directions/v5/mapbox/driving';
+const MAX_CONCURRENT = 3;
 
-// ONE Directions API call with 3 waypoints → two legs of coords + real durations
-export async function getRoute(riderCoords, restaurantCoords, customerCoords) {
+let _active = 0;
+const _queue = [];
+
+function _drain() {
+  while (_active < MAX_CONCURRENT && _queue.length > 0) {
+    const { resolve, reject, args } = _queue.shift();
+    _active++;
+    _callMapbox(...args)
+      .then((result) => { _active--; _drain(); resolve(result); })
+      .catch((err)   => { _active--; _drain(); reject(err); });
+  }
+}
+
+async function _callMapbox(riderCoords, restaurantCoords, customerCoords) {
   if (!config.mapboxToken) throw new Error('MAPBOX_TOKEN not set in environment');
 
   const waypoints = [
@@ -14,8 +27,6 @@ export async function getRoute(riderCoords, restaurantCoords, customerCoords) {
 
   const url = `${MAPBOX_BASE}/${waypoints}?geometries=geojson&steps=true&access_token=${config.mapboxToken}`;
 
-  // Abort the request if Mapbox doesn't respond within 10s so a hung upstream
-  // never stalls the simulation tick — callers fall back to lerp on rejection.
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), 10_000);
 
@@ -47,9 +58,15 @@ export async function getRoute(riderCoords, restaurantCoords, customerCoords) {
   }
 }
 
+export function getRoute(riderCoords, restaurantCoords, customerCoords) {
+  return new Promise((resolve, reject) => {
+    _queue.push({ resolve, reject, args: [riderCoords, restaurantCoords, customerCoords] });
+    _drain();
+  });
+}
+
 function _extractCoords(leg) {
   const all = [];
   for (const step of leg.steps) all.push(...step.geometry.coordinates);
-  // Remove consecutive duplicates that appear at step join points
   return all.filter((c, i) => i === 0 || c[0] !== all[i - 1][0] || c[1] !== all[i - 1][1]);
 }

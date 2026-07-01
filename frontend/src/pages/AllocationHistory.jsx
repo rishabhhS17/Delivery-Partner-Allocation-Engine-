@@ -28,7 +28,14 @@ export default function AllocationHistory() {
       .catch(() => setStatus('error'));
   };
 
-  useEffect(fetchHistory, []);
+  useEffect(() => {
+    let mounted = true;
+    setStatus('loading');
+    getAllocationHistory({ limit: 50 })
+      .then((res) => { if (mounted) { setRecords(res.data.records ?? []); setStatus('ready'); } })
+      .catch(() =>   { if (mounted) setStatus('error'); });
+    return () => { mounted = false; };
+  }, []);
 
   // Prepend live simulation events that aren't already in REST records
   const restIds = new Set(records.map((r) => String(r.orderId?._id ?? r.orderId)));

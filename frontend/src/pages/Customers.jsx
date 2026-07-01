@@ -34,7 +34,14 @@ export default function Customers() {
       .catch(() => setStatus('error'));
   };
 
-  useEffect(fetchCustomers, []);
+  useEffect(() => {
+    let mounted = true;
+    setStatus('loading');
+    getCustomers()
+      .then((res) => { if (mounted) { setCustomers(res.data ?? []); setStatus('ready'); } })
+      .catch(() =>   { if (mounted) setStatus('error'); });
+    return () => { mounted = false; };
+  }, []);
 
   const handleCreate = async () => {
     setCreating(true);

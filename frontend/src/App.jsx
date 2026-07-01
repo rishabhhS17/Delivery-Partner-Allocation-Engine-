@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { SimulationProvider } from './context/SimulationContext';
 import { ToastProvider } from './context/ToastContext';
 import AppRoutes from './routes/AppRoutes';
+import ConnectionBanner from './components/common/ConnectionBanner';
 
 function AppContent() {
   const { isDark } = useTheme();
@@ -19,6 +20,7 @@ function AppContent() {
         <ToastProvider>
           <AuthProvider>
             <SimulationProvider>
+              <ConnectionBanner />
               <AppRoutes />
             </SimulationProvider>
           </AuthProvider>

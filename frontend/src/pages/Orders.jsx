@@ -33,12 +33,19 @@ export default function Orders() {
       .catch(() => setStatus('error'));
   };
 
-  useEffect(fetchOrders, []);
+  useEffect(() => {
+    let mounted = true;
+    setStatus('loading');
+    getOrders()
+      .then((res) => { if (mounted) { setOrders(res.data ?? []); setStatus('ready'); } })
+      .catch(() =>   { if (mounted) setStatus('error'); });
+    return () => { mounted = false; };
+  }, []);
 
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await createOrder();
+      await createOrder(crypto.randomUUID());
       fetchOrders();
       toast.success('Order created');
     } catch {
@@ -51,7 +58,7 @@ export default function Orders() {
   const handleBulkCreate = async () => {
     setBulkCreating(true);
     try {
-      await bulkOrders(Number(bulkCount));
+      await bulkOrders(Number(bulkCount), crypto.randomUUID());
       fetchOrders();
       toast.success(`${bulkCount} orders created`);
     } catch {

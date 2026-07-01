@@ -26,6 +26,9 @@ export function getWeights() {
 
 export function setWeights({ etar, rating, load }) {
   const total = etar + rating + load;
+  if (!Number.isFinite(total) || total <= 0) {
+    throw new Error('Weights must sum to a positive number — got ' + total);
+  }
   currentWeights = {
     etar:   etar   / total,
     rating: rating / total,

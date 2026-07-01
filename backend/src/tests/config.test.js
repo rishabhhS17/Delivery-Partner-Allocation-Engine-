@@ -27,3 +27,17 @@ test('setWeights normalizes custom values so they sum to 1', () => {
   const sum = w.etar + w.rating + w.load;
   assert.ok(Math.abs(sum - 1) < 1e-9, 'normalized weights should sum to 1');
 });
+
+test('setWeights throws when all weights are zero', () => {
+  assert.throws(
+    () => setWeights({ etar: 0, rating: 0, load: 0 }),
+    /weights must sum to a positive number/i
+  );
+});
+
+test('setWeights does not accept negative total', () => {
+  assert.throws(
+    () => setWeights({ etar: -1, rating: -1, load: -1 }),
+    /weights must sum to a positive number/i
+  );
+});

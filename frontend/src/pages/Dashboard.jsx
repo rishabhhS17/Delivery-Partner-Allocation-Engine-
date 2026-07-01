@@ -13,7 +13,7 @@ import { getAnalytics } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './Dashboard.module.css';
 
-const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_TOKEN || '';
+const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
 const RANCHI_CENTER = { longitude: 85.33, latitude: 23.35, zoom: 12 };
 const MAP_STYLE     = 'mapbox://styles/mapbox/dark-v11';
 
@@ -71,13 +71,19 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const load = () =>
-      getAnalytics()
+    let controller = new AbortController();
+
+    const load = () => {
+      controller.abort();
+      controller = new AbortController();
+      getAnalytics({ signal: controller.signal })
         .then((res) => { setAnalytics(res.data); setAnalyticsStatus('ready'); })
-        .catch(() => { setAnalytics(null); setAnalyticsStatus('error'); });
+        .catch((err) => { if (err?.code !== 'ERR_CANCELED') setAnalyticsStatus('error'); });
+    };
+
     load();
     const id = setInterval(load, 10_000);
-    return () => clearInterval(id);
+    return () => { clearInterval(id); controller.abort(); };
   }, []);
 
   const geojson = useMemo(() => ({

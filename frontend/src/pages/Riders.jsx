@@ -25,7 +25,14 @@ export default function Riders() {
       .catch(() => setStatus('error'));
   };
 
-  useEffect(fetchRiders, []);
+  useEffect(() => {
+    let mounted = true;
+    setStatus('loading');
+    getRiders()
+      .then((res) => { if (mounted) { setRiders(res.data ?? []); setStatus('ready'); } })
+      .catch(() =>   { if (mounted) setStatus('error'); });
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <Box>

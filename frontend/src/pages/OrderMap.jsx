@@ -15,7 +15,7 @@ import { getOrder } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './OrderMap.module.css';
 
-const MAPBOX_TOKEN   = import.meta.env.VITE_MAPBOX_TOKEN || '';
+const MAPBOX_TOKEN   = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
 const MAP_STYLE      = 'mapbox://styles/mapbox/dark-v11';
 const RANCHI_DEFAULT = { longitude: 85.33, latitude: 23.35, zoom: 13 };
 

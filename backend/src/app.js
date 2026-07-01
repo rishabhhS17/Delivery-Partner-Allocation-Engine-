@@ -13,9 +13,23 @@ const app = express();
 
 const allowedOrigins = [config.frontendUrl, 'http://localhost:3000', 'http://localhost:5173'];
 
-// CSP disabled: this is an API-only server; the frontend is served from a
-// separate origin (Vite dev server), so Helmet's default CSP would block it.
-app.use(helmet({ contentSecurityPolicy: false }));
+// CSP enabled with explicit directives for API server protection and Mapbox support
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'"],
+      styleSrc:    ["'self'", "'unsafe-inline'"],
+      imgSrc:      ["'self'", 'data:', 'blob:', 'https://*.mapbox.com'],
+      connectSrc:  ["'self'", 'https://*.mapbox.com', process.env.FRONTEND_URL || 'http://localhost:3000'],
+      workerSrc:   ["'self'", 'blob:'],
+      fontSrc:     ["'self'", 'data:'],
+      frameSrc:    ["'none'"],
+      objectSrc:   ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

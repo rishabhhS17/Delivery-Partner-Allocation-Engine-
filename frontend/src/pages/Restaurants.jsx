@@ -34,7 +34,14 @@ export default function Restaurants() {
       .catch(() => setStatus('error'));
   };
 
-  useEffect(fetchRestaurants, []);
+  useEffect(() => {
+    let mounted = true;
+    setStatus('loading');
+    getRestaurants()
+      .then((res) => { if (mounted) { setRestaurants(res.data ?? []); setStatus('ready'); } })
+      .catch(() =>   { if (mounted) setStatus('error'); });
+    return () => { mounted = false; };
+  }, []);
 
   const handleCreate = async () => {
     setCreating(true);

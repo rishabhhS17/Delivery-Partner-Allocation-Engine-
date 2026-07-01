@@ -2,8 +2,25 @@ import Order from '../models/Order.js';
 import { createOrder, bulkCreateOrders } from '../services/orderGenerator.js';
 import { addPendingOrder, isSimulationRunning } from '../services/simulationEngine.js';
 
+// In-memory idempotency cache — prevents duplicate orders from slow-network retries.
+// Keys expire after 60 s; the Map is pruned on each write (bounded by request rate).
+const _seen = new Map();
+const KEY_TTL_MS = 60_000;
+
+function _isDuplicate(key) {
+  if (!key) return false;
+  const now = Date.now();
+  for (const [k, t] of _seen) if (now - t > KEY_TTL_MS) _seen.delete(k);
+  if (_seen.has(key)) return true;
+  _seen.set(key, now);
+  return false;
+}
+
 export const createSingleOrder = async (req, res, next) => {
   try {
+    if (_isDuplicate(req.headers['x-idempotency-key'])) {
+      return res.status(409).json({ success: false, message: 'Duplicate request — order already being created' });
+    }
     if (!isSimulationRunning()) {
       return res.status(409).json({
         success: false,
@@ -20,6 +37,9 @@ export const createSingleOrder = async (req, res, next) => {
 
 export const createBulkOrders = async (req, res, next) => {
   try {
+    if (_isDuplicate(req.headers['x-idempotency-key'])) {
+      return res.status(409).json({ success: false, message: 'Duplicate request — bulk orders already being created' });
+    }
     const count = parseInt(req.body.count, 10);
     if (!count || count < 1 || count > 100) {
       res.status(400);
