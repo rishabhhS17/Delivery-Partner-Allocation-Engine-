@@ -14,7 +14,7 @@ export function SimulationProvider({ children }) {
 
   useEffect(() => {
     const token  = localStorage.getItem('token');
-    const socket = io(WS_URL, { transports: ['websocket'], auth: { token } });
+    const socket = io(WS_URL, { transports: ['websocket', 'polling'], auth: { token } });
 
     socket.on('connect',    () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
