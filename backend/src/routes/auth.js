@@ -1,11 +1,29 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import passport from '../config/passport.js';
 import User from '../models/User.js';
 import { config } from '../config/env.js';
+import {
+  register,
+  verifyRegisterOtp,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
+} from '../controllers/authController.js';
 
 const router = express.Router();
+
+// A 6-digit OTP's real defense is attempt limiting, not length — applied to every OTP
+// request/verify route below, matching app.js's existing loginLimiter shape.
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts, please try again later' },
+});
 
 // POST /api/auth/login — email/password
 router.post('/login', async (req, res) => {
@@ -34,7 +52,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       token,
-      user: { _id: user._id, email: user.email, role: user.role },
+      user: { _id: user._id, email: user.email, role: user.role, avatarUrl: user.avatarUrl ?? null },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -51,7 +69,7 @@ router.get('/me', async (req, res) => {
 
     const token = header.slice(7);
     const decoded = jwt.verify(token, config.jwtSecret);
-    const user = await User.findById(decoded.userId).select('-passwordHash');
+    const user = await User.findById(decoded.userId).select('-passwordHash -otpHash');
     if (!user) return res.status(401).json({ success: false, message: 'User not found' });
 
     res.json({ success: true, user });
@@ -59,6 +77,21 @@ router.get('/me', async (req, res) => {
     res.status(401).json({ success: false, message: 'Invalid token' });
   }
 });
+
+// POST /api/auth/register — { email, password } -> emails a registration OTP
+router.post('/register', otpLimiter, register);
+
+// POST /api/auth/register/verify-otp — { email, otp } -> verifies + issues a session token
+router.post('/register/verify-otp', otpLimiter, verifyRegisterOtp);
+
+// POST /api/auth/forgot-password — { email } -> emails a reset OTP if the account exists
+router.post('/forgot-password', otpLimiter, forgotPassword);
+
+// POST /api/auth/forgot-password/verify-otp — { email, otp } -> issues a short-lived reset token
+router.post('/forgot-password/verify-otp', otpLimiter, verifyResetOtp);
+
+// POST /api/auth/reset-password — { resetToken, newPassword }
+router.post('/reset-password', resetPassword);
 
 // GET /api/auth/google — initiate Google OAuth
 router.get('/google', (req, res, next) => {

@@ -23,6 +23,7 @@ if (config.googleClientId && config.googleClientSecret) {
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        const avatarUrl = profile.photos?.[0]?.value ?? null;
         let user = await User.findOne({ googleId: profile.id });
 
         if (!user) {
@@ -31,16 +32,24 @@ if (config.googleClientId && config.googleClientSecret) {
 
           if (user) {
             user.googleId = profile.id;
-            await user.save();
           } else {
-            user = await User.create({
+            // Google itself proves ownership of this email, so the account is verified
+            // immediately — no separate OTP step needed, unlike email/password registration.
+            // New signups default to 'partner'; elevate to 'admin' explicitly via the database,
+            // never automatically at signup time.
+            user = new User({
               email:        email ?? `${profile.id}@google.com`,
               googleId:     profile.id,
-              role:         'admin',
+              role:         'partner',
               passwordHash: '',
+              isVerified:   true,
             });
           }
         }
+
+        // Keep the avatar fresh on every login, not just the first.
+        user.avatarUrl = avatarUrl;
+        await user.save();
 
         return done(null, user);
       } catch (err) {

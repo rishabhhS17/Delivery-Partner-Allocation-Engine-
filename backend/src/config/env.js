@@ -21,4 +21,12 @@ export const config = {
   googleClientId:    process.env.GOOGLE_CLIENT_ID    || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback',
+
+  // Optional — email/OTP flows degrade to logging the OTP to the server console when unset,
+  // so registration/reset stay fully testable without real mail credentials configured.
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: process.env.SMTP_PORT || '',
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || '',
 };
