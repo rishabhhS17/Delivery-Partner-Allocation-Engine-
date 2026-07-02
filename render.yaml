@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: dpae-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production

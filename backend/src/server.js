@@ -14,6 +14,7 @@ const allowedOrigins = [config.frontendUrl, 'http://localhost:3000', 'http://loc
 
 const io = new Server(httpServer, {
   cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
+  transports: ['websocket', 'polling'],
 });
 
 initSimulation(io);
