@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField } from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField,
+  Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Typography,
+} from '@mui/material';
 import { RefreshCw, Plus, Layers, MapPin } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
@@ -9,18 +12,27 @@ import { NoOrdersIllustration } from '../components/common/illustrations';
 import { SkeletonRows } from '../components/common/Skeleton';
 import Spinner from '../components/common/Spinner';
 import { useToast } from '../context/ToastContext';
-import { getOrders, createOrder, bulkOrders } from '../api/endpoints';
+import { getOrders, createOrder, bulkOrders, getRestaurants } from '../api/endpoints';
 import styles from './Orders.module.css';
 
 const COLUMNS = 6;
 
 export default function Orders() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState('loading');
   const [bulkCount, setBulkCount] = useState(5);
   const [creating, setCreating] = useState(false);
   const [bulkCreating, setBulkCreating] = useState(false);
+
+  // "Place order for [customer]" flow — arrived at via a Customers.jsx row action.
+  const [placeOrderOpen, setPlaceOrderOpen] = useState(false);
+  const [prefillCustomer, setPrefillCustomer] = useState(null); // { id, name }
+  const [restaurants, setRestaurants] = useState([]);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
+  const [placingOrder, setPlacingOrder] = useState(false);
+
   const toast = useToast();
 
   const fetchOrders = () => {
@@ -42,16 +54,54 @@ export default function Orders() {
     return () => { mounted = false; };
   }, []);
 
+  // Arrived here via "Place order" on a Customers.jsx row — open the restaurant-selection
+  // dialog pre-filled with that customer. Clear the router state so a page refresh/back-nav
+  // doesn't re-trigger it.
+  useEffect(() => {
+    const { prefillCustomerId, prefillCustomerName } = location.state ?? {};
+    if (!prefillCustomerId) return;
+
+    setPrefillCustomer({ id: prefillCustomerId, name: prefillCustomerName });
+    setPlaceOrderOpen(true);
+    getRestaurants()
+      .then((res) => setRestaurants(res.data ?? []))
+      .catch(() => toast.error('Could not load restaurants'));
+
+    navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await createOrder(crypto.randomUUID());
+      await createOrder({}, crypto.randomUUID());
       fetchOrders();
       toast.success('Order created');
     } catch {
       toast.error('Could not create order');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const closePlaceOrderDialog = () => {
+    setPlaceOrderOpen(false);
+    setPrefillCustomer(null);
+    setSelectedRestaurantId('');
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!prefillCustomer || !selectedRestaurantId) return;
+    setPlacingOrder(true);
+    try {
+      await createOrder({ customerId: prefillCustomer.id, restaurantId: selectedRestaurantId }, crypto.randomUUID());
+      fetchOrders();
+      toast.success(`Order placed for ${prefillCustomer.name || 'customer'}`);
+      closePlaceOrderDialog();
+    } catch {
+      toast.error('Could not place order');
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
@@ -156,6 +206,33 @@ export default function Orders() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog open={placeOrderOpen} onClose={closePlaceOrderDialog}>
+        <DialogTitle>Place order for {prefillCustomer?.name || 'customer'}</DialogTitle>
+        <DialogContent className={styles.placeOrderForm}>
+          <Typography className={styles.placeOrderHint}>
+            Choose the restaurant this order should be picked up from.
+          </Typography>
+          <TextField
+            select
+            label="Restaurant"
+            value={selectedRestaurantId}
+            onChange={(e) => setSelectedRestaurantId(e.target.value)}
+            size="small"
+            fullWidth
+          >
+            {restaurants.map((r) => (
+              <MenuItem key={r._id} value={r._id}>{r.name}</MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePlaceOrderDialog} disabled={placingOrder}>Cancel</Button>
+          <Button variant="contained" onClick={handlePlaceOrder} disabled={placingOrder || !selectedRestaurantId}>
+            {placingOrder ? <Spinner size="sm" /> : 'Place order'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -10,6 +10,12 @@
   min-width: 320px;
 }
 
+.fieldError {
+  font-size: 13px;
+  color: var(--error);
+  margin-top: 4px;
+}
+
 .activeBadge {
   font-size: 12px;
   font-weight: 500;

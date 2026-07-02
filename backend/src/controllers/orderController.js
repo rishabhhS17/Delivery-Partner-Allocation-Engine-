@@ -27,7 +27,14 @@ export const createSingleOrder = async (req, res, next) => {
         message: 'Simulation is currently stopped. Start simulation before creating live orders.',
       });
     }
-    const order = await createOrder();
+
+    const { customerId, restaurantId } = req.body ?? {};
+    if ((customerId && !restaurantId) || (!customerId && restaurantId)) {
+      res.status(400);
+      throw new Error('Both customerId and restaurantId are required together, or omit both to auto-pick a pair');
+    }
+
+    const order = await createOrder({ customerId, restaurantId });
     addPendingOrder(order);
     res.status(201).json({ success: true, data: order });
   } catch (err) {

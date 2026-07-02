@@ -6,6 +6,43 @@ const MAX_CONCURRENT = 3;
 let _active = 0;
 const _queue = [];
 
+// Route cache — reuses a recently-computed route instead of hitting the Mapbox Directions API
+// again for the same (or a very close) rider/restaurant/customer coordinate triple. Restaurants
+// and customers are static, so their contribution to the cache key is exact; rider coordinates
+// are rounded to a ~111m grid, which is acceptable because simulationEngine.js already treats a
+// fetched route as an enhancement over a straight-line lerp fallback — a slightly-off cached
+// origin is no worse than that existing gap, and it self-corrects at the rider's next
+// assignment. Keys expire after ROUTE_CACHE_TTL_MS; pruned opportunistically on each write,
+// matching orderController.js's `_isDuplicate` idempotency-cache pattern.
+const ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
+const _routeCache = new Map(); // key -> { route, expiresAt }
+let _cacheHits = 0;
+let _cacheMisses = 0;
+
+function _round(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+function _cacheKey(riderCoords, restaurantCoords, customerCoords) {
+  return [riderCoords, restaurantCoords, customerCoords]
+    .map((c) => `${_round(c.lat)},${_round(c.lng)}`)
+    .join('|');
+}
+
+function _pruneRouteCache() {
+  const now = Date.now();
+  for (const [key, entry] of _routeCache) {
+    if (entry.expiresAt <= now) _routeCache.delete(key);
+  }
+}
+
+function _logCacheStats() {
+  const total = _cacheHits + _cacheMisses;
+  if (total > 0 && total % 20 === 0) {
+    console.log(`[routing] route cache: ${_cacheHits}/${total} hits (${Math.round((_cacheHits / total) * 100)}%), ${_routeCache.size} cached entries`);
+  }
+}
+
 function _drain() {
   while (_active < MAX_CONCURRENT && _queue.length > 0) {
     const { resolve, reject, args } = _queue.shift();
@@ -59,8 +96,27 @@ async function _callMapbox(riderCoords, restaurantCoords, customerCoords) {
 }
 
 export function getRoute(riderCoords, restaurantCoords, customerCoords) {
+  const key = _cacheKey(riderCoords, restaurantCoords, customerCoords);
+  const hit = _routeCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) {
+    _cacheHits++;
+    _logCacheStats();
+    return Promise.resolve(hit.route);
+  }
+
+  _cacheMisses++;
+  _logCacheStats();
+
   return new Promise((resolve, reject) => {
-    _queue.push({ resolve, reject, args: [riderCoords, restaurantCoords, customerCoords] });
+    _queue.push({
+      resolve: (route) => {
+        _pruneRouteCache();
+        _routeCache.set(key, { route, expiresAt: Date.now() + ROUTE_CACHE_TTL_MS });
+        resolve(route);
+      },
+      reject,
+      args: [riderCoords, restaurantCoords, customerCoords],
+    });
     _drain();
   });
 }

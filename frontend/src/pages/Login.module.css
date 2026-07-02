@@ -51,6 +51,21 @@
   line-height: 20px !important;
 }
 
+.links {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.link {
+  color: var(--link);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
 .divider {
   display: flex;
   align-items: center;
