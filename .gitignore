@@ -17,3 +17,4 @@ frontend/UI_IMPLEMENTATION_LOG.md
 /docs/SIMULATION_LOGIC_EXPLANATION.MD
 /docs/bugs.md
 /docs/simulation_bugs.md
+backend/.env.example
