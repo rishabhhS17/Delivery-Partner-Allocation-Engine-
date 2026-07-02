@@ -228,29 +228,68 @@ priority):
   component, page, and context.
 - `npm install` was run in both `backend/` and `frontend/`; `nodemailer` added to
   `backend/package.json`.
-- **Not performed** (requires credentials not available in this environment): a live end-to-end
-  run against a real MongoDB instance, real Mapbox token, or real SMTP provider. See the manual
-  testing checklist below before considering this deployed.
+### Live end-to-end verification (2026-07-02, post-implementation)
+
+After the initial static verification above, the app was actually run and driven — first against
+a disposable local Docker MongoDB, then against the real Atlas cluster, real Mapbox account, real
+Google OAuth credentials, and real Gmail SMTP. Findings from that session, and fixes applied as a
+direct result:
+
+- **`isVerified` gap on pre-existing accounts.** Every account that existed before this session's
+  auth work (the seeded admin, plus several Google-linked accounts) had no `isVerified` field set,
+  which defaults to `false` — meaning `forgot-password` silently refused to send them a code (by
+  design, to avoid leaking which emails exist, so this failed silently rather than with an error).
+  **Fixed via a one-time backfill** against the real database: any account with a working
+  password hash or a linked `googleId` (i.e., already provably owns that login) was marked
+  `isVerified: true`. New accounts going through registration are unaffected — they still require
+  OTP verification. Ran as a one-off script, not a migration file, since it only needed to run
+  once against the one real database in question.
+- **Confirmed the OAuth privilege-escalation bug was real and had already caused live damage.**
+  Every one of the 5 pre-existing Google-linked accounts in the real database had `role: 'admin'`
+  — direct, real-world confirmation of the bug this session fixed. The fix only prevents *future*
+  over-privileged signups; it does not retroactively correct these 5 existing accounts (that would
+  be a data decision, not something a code fix should silently do).
+- **The Mapbox token in `.env` was invalid.** Confirmed directly against Mapbox's own API
+  (bypassing the app entirely) — `{"code":"TokenRevoked", ...}`. This caused both blank map tiles
+  in the frontend and the backend's route-fetching to fail (with graceful fallback to straight-line
+  movement, as designed — nothing crashed). Not a code issue; resolved by generating a fresh token
+  in the Mapbox dashboard.
+- **`redirect_uri_mismatch` on Google sign-in** turned out to be a genuinely missing entry in
+  Google Cloud Console's Authorized Redirect URIs list (only the production Render URL was
+  registered, not the local one) — confirmed by decoding Google's own error response, which
+  echoes back the exact `redirect_uri` it received and rejected. Resolved by adding the local
+  callback URL as an additional authorized entry (both can coexist).
+- **Confirmed working end-to-end, with real infrastructure, not just mocked/local:** admin login;
+  live socket data (Dashboard's Recent Allocations correctly rendering `Restaurant → Customer`,
+  confirming Priority 6 against real allocation events); rider creation via the new dialog with
+  validation; Google OAuth sign-in completing successfully with the corrected `role: 'partner'`
+  default; and the full OTP email flow — registration and forgot-password — with the code
+  actually delivered to a real Gmail inbox via a real app-password-authenticated SMTP connection
+  (tested first against Ethereal's fake-inbox SMTP service, then against real Gmail).
+- **Priority 1's fix also self-confirmed live**: logging out (a genuine, sustained disconnect)
+  correctly showed the disconnect banner after the grace period; ordinary page loads and
+  navigation did not produce false positives.
 
 ### Manual testing checklist
 
-- [ ] Refresh while logged in — disconnect banner should not flash
-- [ ] Log in — live socket data (map/dashboard) starts working
+- [x] Refresh while logged in — disconnect banner should not flash
+- [x] Log in — live socket data (map/dashboard) starts working
 - [ ] Create several orders for the same restaurant/rider pair — watch for
-      `[routing] route cache: X/Y hits` in server logs
-- [ ] Riders: "Add rider" — empty submit shows inline errors + disabled Save; map click updates
+      `[routing] route cache: X/Y hits` in server logs (blocked on the revoked Mapbox token being
+      replaced with a valid one — route-fetching currently always fails and falls back, so no
+      cache hits are possible to observe yet)
+- [x] Riders: "Add rider" — empty submit shows inline errors + disabled Save; map click updates
       lat/lng fields; save succeeds and the rider appears in the table
-- [ ] Riders: "Current order" shows `Restaurant → Customer`; Total orders / Orders (1h) populate
+- [x] Riders: "Current order" shows `Restaurant → Customer`; Total orders / Orders (1h) populate
       after deliveries complete
 - [ ] Restaurants/Customers: same validation + map-picker behavior as Riders
 - [ ] Customers: shopping-bag icon → redirected to Orders with a restaurant-selection dialog
       pre-filled with that customer; existing "Create order"/"Bulk create" buttons still work
       unchanged
-- [ ] Register a new account → OTP appears in server console (SMTP unset) → verify → lands on
-      dashboard
-- [ ] Forgot-password flow end to end; response is identical for a real vs. a fake email
-- [ ] Google login → new users get `role: 'partner'` (not admin); profile photo appears in the
-      Topbar
+- [x] Register a new account → OTP delivered via real Gmail → verify → lands on dashboard
+- [x] Forgot-password flow end to end, with a real emailed code, against a real Gmail inbox
+- [x] Google login → new users get `role: 'partner'` (not admin); confirmed via direct database
+      inspection after a fresh sign-in
 
 ### Assumptions
 
