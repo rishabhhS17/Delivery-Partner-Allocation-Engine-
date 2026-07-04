@@ -1,28 +1,36 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
+  Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Typography,
 } from '@mui/material';
-import { Trash2, RefreshCw, Plus } from 'lucide-react';
+import { Trash2, RefreshCw, Plus, ShoppingBag } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
+import LocationPicker from '../components/common/LocationPicker';
 import { NoCustomersIllustration } from '../components/common/illustrations';
 import { SkeletonRows } from '../components/common/Skeleton';
 import Spinner from '../components/common/Spinner';
 import { useToast } from '../context/ToastContext';
+import { validateLocationForm } from '../utils/formValidation';
 import { getCustomers, createCustomer, deleteCustomer } from '../api/endpoints';
 import styles from './Customers.module.css';
 
 const EMPTY_FORM = { name: '', phone: '', address: '', latitude: '', longitude: '' };
-const COLUMNS = 7;
+const COLUMNS = 8;
 
 export default function Customers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const toast = useToast();
+
+  const errors = validateLocationForm(form);
+  const showError = (field) => (attemptedSubmit || form[field] !== '') && errors[field];
 
   const fetchCustomers = () => {
     setStatus('loading');
@@ -44,6 +52,9 @@ export default function Customers() {
   }, []);
 
   const handleCreate = async () => {
+    setAttemptedSubmit(true);
+    if (Object.keys(errors).length > 0) return;
+
     setCreating(true);
     try {
       await createCustomer({
@@ -53,6 +64,7 @@ export default function Customers() {
       });
       setDialogOpen(false);
       setForm(EMPTY_FORM);
+      setAttemptedSubmit(false);
       fetchCustomers();
       toast.success(`${form.name || 'Customer'} added`);
     } catch {
@@ -60,6 +72,12 @@ export default function Customers() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setForm(EMPTY_FORM);
+    setAttemptedSubmit(false);
   };
 
   const handleDelete = async (id, name) => {
@@ -70,6 +88,10 @@ export default function Customers() {
     } catch {
       toast.error('Could not remove customer');
     }
+  };
+
+  const handlePlaceOrder = (customer) => {
+    navigate('/orders', { state: { prefillCustomerId: customer._id, prefillCustomerName: customer.name } });
   };
 
   return (
@@ -85,7 +107,7 @@ export default function Customers() {
       />
 
       <TableContainer component={Paper} elevation={0} sx={{ overflowX: 'auto' }}>
-        <Table sx={{ minWidth: 580 }}>
+        <Table sx={{ minWidth: 640 }}>
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
@@ -94,6 +116,7 @@ export default function Customers() {
               <TableCell>Latitude</TableCell>
               <TableCell>Longitude</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell align="right">Order</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -146,6 +169,11 @@ export default function Customers() {
                   </span>
                 </TableCell>
                 <TableCell align="right">
+                  <IconButton size="small" onClick={() => handlePlaceOrder(c)} aria-label="Place order for this customer" disabled={!c.isActive}>
+                    <ShoppingBag size={16} />
+                  </IconButton>
+                </TableCell>
+                <TableCell align="right">
                   <IconButton size="small" color="error" onClick={() => handleDelete(c._id, c.name)} aria-label="Remove customer">
                     <Trash2 size={16} />
                   </IconButton>
@@ -156,18 +184,30 @@ export default function Customers() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} onClose={closeDialog}>
         <DialogTitle>Add customer</DialogTitle>
         <DialogContent className={styles.dialogForm}>
-          <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} size="small" fullWidth />
-          <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} size="small" fullWidth />
+          <Box>
+            <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} size="small" fullWidth error={!!showError('name')} />
+            {showError('name') && <Typography className={styles.fieldError}>{errors.name}</Typography>}
+          </Box>
+          <Box>
+            <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} size="small" fullWidth error={!!showError('phone')} />
+            {showError('phone') && <Typography className={styles.fieldError}>{errors.phone}</Typography>}
+          </Box>
           <TextField label="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} size="small" fullWidth />
-          <TextField label="Latitude" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} size="small" fullWidth />
-          <TextField label="Longitude" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} size="small" fullWidth />
+          <LocationPicker
+            latitude={form.latitude}
+            longitude={form.longitude}
+            onChange={(latitude, longitude) => setForm({ ...form, latitude, longitude })}
+          />
+          {attemptedSubmit && (errors.latitude || errors.longitude) && (
+            <Typography className={styles.fieldError}>{errors.latitude || errors.longitude}</Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} disabled={creating}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={creating}>
+          <Button onClick={closeDialog} disabled={creating}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreate} disabled={creating || Object.keys(errors).length > 0}>
             {creating ? <Spinner size="sm" /> : 'Save'}
           </Button>
         </DialogActions>
