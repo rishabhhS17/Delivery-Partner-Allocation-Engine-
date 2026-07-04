@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
+  Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Typography,
 } from '@mui/material';
 import { Trash2, RefreshCw, Plus } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
+import LocationPicker from '../components/common/LocationPicker';
 import { NoRestaurantsIllustration } from '../components/common/illustrations';
 import { SkeletonRows } from '../components/common/Skeleton';
 import Spinner from '../components/common/Spinner';
 import { useToast } from '../context/ToastContext';
+import { validateLocationForm } from '../utils/formValidation';
 import { getRestaurants, createRestaurant, deleteRestaurant } from '../api/endpoints';
 import styles from './Restaurants.module.css';
 
@@ -22,7 +24,11 @@ export default function Restaurants() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const toast = useToast();
+
+  const errors = validateLocationForm(form);
+  const showError = (field) => (attemptedSubmit || form[field] !== '') && errors[field];
 
   const fetchRestaurants = () => {
     setStatus('loading');
@@ -44,6 +50,9 @@ export default function Restaurants() {
   }, []);
 
   const handleCreate = async () => {
+    setAttemptedSubmit(true);
+    if (Object.keys(errors).length > 0) return;
+
     setCreating(true);
     try {
       await createRestaurant({
@@ -53,6 +62,7 @@ export default function Restaurants() {
       });
       setDialogOpen(false);
       setForm(EMPTY_FORM);
+      setAttemptedSubmit(false);
       fetchRestaurants();
       toast.success(`${form.name || 'Restaurant'} added`);
     } catch {
@@ -60,6 +70,12 @@ export default function Restaurants() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setForm(EMPTY_FORM);
+    setAttemptedSubmit(false);
   };
 
   const handleDelete = async (id, name) => {
@@ -154,17 +170,29 @@ export default function Restaurants() {
         </Table>
       </TableContainer>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} onClose={closeDialog}>
         <DialogTitle>Add restaurant</DialogTitle>
         <DialogContent className={styles.dialogForm}>
-          <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} size="small" fullWidth />
-          <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} size="small" fullWidth />
-          <TextField label="Latitude" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} size="small" fullWidth />
-          <TextField label="Longitude" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} size="small" fullWidth />
+          <Box>
+            <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} size="small" fullWidth error={!!showError('name')} />
+            {showError('name') && <Typography className={styles.fieldError}>{errors.name}</Typography>}
+          </Box>
+          <Box>
+            <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} size="small" fullWidth error={!!showError('phone')} />
+            {showError('phone') && <Typography className={styles.fieldError}>{errors.phone}</Typography>}
+          </Box>
+          <LocationPicker
+            latitude={form.latitude}
+            longitude={form.longitude}
+            onChange={(latitude, longitude) => setForm({ ...form, latitude, longitude })}
+          />
+          {attemptedSubmit && (errors.latitude || errors.longitude) && (
+            <Typography className={styles.fieldError}>{errors.latitude || errors.longitude}</Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} disabled={creating}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={creating}>
+          <Button onClick={closeDialog} disabled={creating}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreate} disabled={creating || Object.keys(errors).length > 0}>
             {creating ? <Spinner size="sm" /> : 'Save'}
           </Button>
         </DialogActions>

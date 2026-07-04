@@ -59,7 +59,7 @@ export default function Topbar({ handleDrawerToggle }) {
           >
             Log out
           </Button>
-          <Avatar className={styles.avatar}>
+          <Avatar src={user?.avatarUrl || undefined} className={styles.avatar}>
             {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AD'}
           </Avatar>
         </Box>

@@ -8,10 +8,30 @@ import {
 } from '../validators/riderValidator.js';
 
 // Normalize a rider doc for API responses: the DB schema stores latitude/longitude,
-// but all clients (map markers, socket tick) standardize on lat/lng.
+// but all clients (map markers, socket tick) standardize on lat/lng. When `currentOrderId`
+// has been `.populate()`d with restaurant/customer names, also attach a flattened
+// `currentOrderSummary` so clients can render "Restaurant → Customer" without a second lookup;
+// `currentOrderId` itself always stays the raw id.
 const serializeRider = (rider) => {
-  const { latitude, longitude, ...rest } = rider.toObject();
-  return { ...rest, lat: latitude, lng: longitude };
+  const { latitude, longitude, currentOrderId, ...rest } = rider.toObject();
+
+  const isPopulatedOrder = currentOrderId && typeof currentOrderId === 'object' && 'restaurantName' in currentOrderId;
+  const currentOrderSummary = isPopulatedOrder
+    ? { restaurantName: currentOrderId.restaurantName, customerName: currentOrderId.customerName }
+    : null;
+
+  const deliveryTimestamps = rest.deliveryTimestamps ?? [];
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+  return {
+    ...rest,
+    lat: latitude,
+    lng: longitude,
+    currentOrderId: isPopulatedOrder ? currentOrderId._id : currentOrderId,
+    currentOrderSummary,
+    totalOrders: deliveryTimestamps.length,
+    ordersLastHour: deliveryTimestamps.filter((t) => new Date(t).getTime() > oneHourAgo).length,
+  };
 };
 
 export const createRider = async (req, res, next) => {
@@ -41,9 +61,11 @@ export const createRider = async (req, res, next) => {
   }
 };
 
+const CURRENT_ORDER_POPULATE = { path: 'currentOrderId', select: 'restaurantName customerName' };
+
 export const getAllRiders = async (req, res, next) => {
   try {
-    const riders = await Rider.find().sort({ createdAt: -1 });
+    const riders = await Rider.find().sort({ createdAt: -1 }).populate(CURRENT_ORDER_POPULATE);
     res.json({ success: true, data: riders.map(serializeRider) });
   } catch (err) {
     next(err);
@@ -52,7 +74,7 @@ export const getAllRiders = async (req, res, next) => {
 
 export const getRiderById = async (req, res, next) => {
   try {
-    const rider = await Rider.findById(req.params.id);
+    const rider = await Rider.findById(req.params.id).populate(CURRENT_ORDER_POPULATE);
     if (!rider) { res.status(404); throw new Error('Rider not found'); }
     res.json({ success: true, data: serializeRider(rider) });
   } catch (err) {

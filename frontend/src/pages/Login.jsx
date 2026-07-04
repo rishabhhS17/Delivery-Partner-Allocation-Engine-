@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Box, Card, Typography, TextField, Button } from '@mui/material';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/common/Spinner';
 import Logo from '../components/common/Logo';
@@ -81,6 +81,11 @@ export default function Login() {
             {submitting ? <Spinner size="sm" /> : 'Log in'}
           </Button>
         </form>
+
+        <Box className={styles.links}>
+          <RouterLink to="/forgot-password" className={styles.link}>Forgot password?</RouterLink>
+          <RouterLink to="/register" className={styles.link}>Create an account</RouterLink>
+        </Box>
 
         <div className={styles.divider}>or</div>
 

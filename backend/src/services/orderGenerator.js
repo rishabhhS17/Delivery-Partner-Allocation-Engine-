@@ -22,8 +22,23 @@ async function pickPair() {
   throw new Error('No customer found within service area of any restaurant after 10 attempts');
 }
 
-export async function createOrder() {
-  const { restaurant, customer } = await pickPair();
+// customerId/restaurantId let a caller request a specific pair (e.g. a dispatcher placing an
+// order for a chosen customer at a chosen restaurant) instead of the default random pairing.
+// Omitting both (the existing behavior — bulkCreateOrders and the auto-order timer both call
+// this with no arguments) falls through to pickPair() unchanged.
+export async function createOrder({ customerId, restaurantId } = {}) {
+  let restaurant, customer;
+
+  if (customerId && restaurantId) {
+    [restaurant, customer] = await Promise.all([
+      Restaurant.findOne({ _id: restaurantId, isActive: true }),
+      Customer.findOne({ _id: customerId, isActive: true }),
+    ]);
+    if (!restaurant) throw new Error('Restaurant not found or inactive');
+    if (!customer) throw new Error('Customer not found or inactive');
+  } else {
+    ({ restaurant, customer } = await pickPair());
+  }
 
   return Order.create({
     restaurantId:   restaurant._id,
