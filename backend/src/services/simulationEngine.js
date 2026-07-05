@@ -23,8 +23,17 @@ const recentAssignments = [];          // capped ring-buffer of last 20 order:as
 const RECENT_CAP        = 20;
 
 let tickTimer = null;
+let healTimer = null;
 let ioRef     = null;
 let running   = false;
+
+// Runtime orphan sweep cadence. The startup healers (_healOrphanedRiders/_healOrphanedOrders)
+// only run once, at hydrate — so an order left ASSIGNED with no live rider (e.g. a partial DB
+// write, or a crash between the two assignment writes) lingers until the next restart. This
+// sweep reconciles those back into the live loop while the sim runs. The grace window skips
+// freshly-assigned orders so the assignment write race is never mistaken for an orphan.
+const ORPHAN_SWEEP_INTERVAL_MS = 30_000;
+const ORPHAN_GRACE_MS          = 20_000;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -46,6 +55,9 @@ export async function startSimulation() {
   await hydrate();
   running   = true;
   tickTimer = setInterval(tick, TICK_INTERVAL_MS);
+  healTimer = setInterval(() => {
+    _sweepOrphanedOrders().catch(err => console.error('[sim] orphan sweep failed:', err.message));
+  }, ORPHAN_SWEEP_INTERVAL_MS);
   startAutoOrderJob(addPendingOrder);
   if (ioRef) ioRef.emit('simulation:status', { running: true });
   console.log('[sim] started');
@@ -55,6 +67,8 @@ export async function stopSimulation() {
   if (!running) return;
   clearInterval(tickTimer);
   tickTimer = null;
+  clearInterval(healTimer);
+  healTimer = null;
   running   = false;
   stopAutoOrderJob();
 
@@ -148,10 +162,12 @@ async function _healOrphanedRiders() {
       { assignedRiderId: { $in: orphanedIds }, status: 'ASSIGNED' },
       { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
     ),
-    // PICKED_UP orders → cancel (food was collected but delivery never completed)
+    // PICKED_UP orders with no rider in-flight → re-queue as PENDING so a fresh rider
+    // re-delivers them (a simulation has no real collected food to strand, and this avoids
+    // tagging a recoverable order CANCELLED).
     Order.updateMany(
       { assignedRiderId: { $in: orphanedIds }, status: 'PICKED_UP' },
-      { $set: { status: 'CANCELLED', cancelledAt: new Date() } }
+      { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
     ),
   ]);
 }
@@ -165,7 +181,8 @@ async function _healOrphanedRiders() {
 //
 // 2. PICKED_UP orders whose rider is now IDLE — _transitionToDelivered fires a DB write
 //    to mark the order DELIVERED, but if that write fails silently the order stays stuck
-//    as PICKED_UP forever. Since we can't confirm delivery, mark these CANCELLED.
+//    as PICKED_UP forever. Re-queue these as PENDING so a fresh rider re-delivers them,
+//    rather than tagging a recoverable order CANCELLED.
 async function _healOrphanedOrders() {
   // ── Part 1: orphaned ASSIGNED orders ──────────────────────────────────────
   const assignedOrders = await Order.find({ status: 'ASSIGNED' }).lean();
@@ -198,14 +215,49 @@ async function _healOrphanedOrders() {
     .select('_id').lean();
   const activePickupSet = new Set(activePickup.map(r => r._id.toString()));
 
-  const toCancel = stuck.filter(o => !activePickupSet.has(o.assignedRiderId?.toString()));
-  if (!toCancel.length) return;
+  const stuckOrphans = stuck.filter(o => !activePickupSet.has(o.assignedRiderId?.toString()));
+  if (!stuckOrphans.length) return;
 
-  console.warn(`[sim] cancelling ${toCancel.length} stuck PICKED_UP order(s)`);
+  console.warn(`[sim] re-queuing ${stuckOrphans.length} stuck PICKED_UP order(s) → PENDING`);
   await Order.updateMany(
-    { _id: { $in: toCancel.map(o => o._id) } },
-    { $set: { status: 'CANCELLED', cancelledAt: new Date() } }
+    { _id: { $in: stuckOrphans.map(o => o._id) } },
+    { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
   );
+}
+
+// Runtime counterpart to _healOrphanedOrders, using the in-memory riderState as the source of
+// truth (it, not the DB, drives a running sim). Any order the DB still marks ASSIGNED or PICKED_UP
+// but that no live rider is actually delivering is a genuine orphan — hand it back to the tick
+// (pendingQueue + DB → PENDING) so it gets reallocated to a free rider and re-delivered, instead
+// of being stranded (and eventually CANCELLED). The grace window and the live/queued checks make
+// this safe against the assignment write race; it changes no allocation, movement, or
+// state-machine logic.
+async function _sweepOrphanedOrders() {
+  if (!running) return;
+  const cutoff = new Date(Date.now() - ORPHAN_GRACE_MS);
+
+  const liveOrderIds = new Set();
+  for (const [, r] of riderState) {
+    if (r.currentOrderId) liveOrderIds.add(r.currentOrderId.toString());
+  }
+
+  const active = await Order.find({
+    status: { $in: ['ASSIGNED', 'PICKED_UP'] },
+    assignedAt: { $lt: cutoff },
+  });
+  for (const ord of active) {
+    const idStr = ord._id.toString();
+    if (liveOrderIds.has(idStr) || pendingQueue.has(idStr)) continue; // in flight or already queued
+
+    const wasStatus     = ord.status;
+    ord.status          = 'PENDING';
+    ord.assignedRiderId = null;
+    pendingQueue.set(idStr, ord); // hand back to the tick for reallocation
+    await Order.findByIdAndUpdate(ord._id, {
+      status: 'PENDING', assignedRiderId: null, assignedAt: null,
+    }).catch(err => console.error('[sim] orphan requeue write failed:', err.message));
+    console.warn(`[sim] runtime orphan swept → re-queued ${wasStatus} order`, idStr);
+  }
 }
 
 async function hydrate() {

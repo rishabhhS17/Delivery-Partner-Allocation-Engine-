@@ -4,7 +4,7 @@ import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TextField,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Typography,
 } from '@mui/material';
-import { RefreshCw, Plus, Layers, MapPin } from 'lucide-react';
+import { RefreshCw, Plus, MapPin } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
@@ -22,9 +22,10 @@ export default function Orders() {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState('loading');
-  const [bulkCount, setBulkCount] = useState(5);
+  // Single count-driven create control. count === 1 is the old "Create order"; count > 1 is
+  // the old "Bulk create" — they were redundant (bulk-of-1 == create), so one field drives both.
+  const [orderCount, setOrderCount] = useState(1);
   const [creating, setCreating] = useState(false);
-  const [bulkCreating, setBulkCreating] = useState(false);
 
   // "Place order for [customer]" flow — arrived at via a Customers.jsx row action.
   const [placeOrderOpen, setPlaceOrderOpen] = useState(false);
@@ -71,14 +72,22 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  const handleCreate = async () => {
+  // Create one or many random orders. count === 1 uses the single-order endpoint (which keeps its
+  // "simulation must be running" guard); count > 1 uses the bulk endpoint. explicitCount lets the
+  // empty-state button force a single order regardless of the current field value.
+  const handleGenerate = async (explicitCount) => {
+    const count = Math.max(1, Math.min(100, Number(explicitCount ?? orderCount) || 1));
     setCreating(true);
     try {
-      await createOrder({}, crypto.randomUUID());
+      if (count === 1) {
+        await createOrder({}, crypto.randomUUID());
+      } else {
+        await bulkOrders(count, crypto.randomUUID());
+      }
       fetchOrders();
-      toast.success('Order created');
+      toast.success(count === 1 ? 'Order created' : `${count} orders created`);
     } catch {
-      toast.error('Could not create order');
+      toast.error(count === 1 ? 'Could not create order' : 'Could not create orders');
     } finally {
       setCreating(false);
     }
@@ -105,19 +114,6 @@ export default function Orders() {
     }
   };
 
-  const handleBulkCreate = async () => {
-    setBulkCreating(true);
-    try {
-      await bulkOrders(Number(bulkCount), crypto.randomUUID());
-      fetchOrders();
-      toast.success(`${bulkCount} orders created`);
-    } catch {
-      toast.error('Could not bulk-create orders');
-    } finally {
-      setBulkCreating(false);
-    }
-  };
-
   return (
     <Box>
       <PageHeader
@@ -128,16 +124,14 @@ export default function Orders() {
             <TextField
               size="small"
               type="number"
-              value={bulkCount}
-              onChange={(e) => setBulkCount(e.target.value)}
+              value={orderCount}
+              onChange={(e) => setOrderCount(e.target.value)}
               className={styles.bulkCount}
-              aria-label="Bulk order count"
+              inputProps={{ min: 1, max: 100 }}
+              aria-label="Number of orders to create"
             />
-            <Button variant="outlined" startIcon={bulkCreating ? <Spinner size="sm" /> : <Layers size={16} />} onClick={handleBulkCreate} disabled={bulkCreating}>
-              Bulk create
-            </Button>
-            <Button variant="contained" startIcon={creating ? <Spinner size="sm" /> : <Plus size={16} />} onClick={handleCreate} disabled={creating}>
-              Create order
+            <Button variant="contained" startIcon={creating ? <Spinner size="sm" /> : <Plus size={16} />} onClick={() => handleGenerate()} disabled={creating}>
+              {Number(orderCount) > 1 ? `Create ${Number(orderCount)} orders` : 'Create order'}
             </Button>
           </Box>
         }
@@ -182,7 +176,7 @@ export default function Orders() {
                     title="No orders yet"
                     description="Orders created here will appear once the backend is running."
                     action={
-                      <Button size="small" variant="contained" startIcon={<Plus size={14} />} onClick={handleCreate}>
+                      <Button size="small" variant="contained" startIcon={<Plus size={14} />} onClick={() => handleGenerate(1)}>
                         Create order
                       </Button>
                     }
