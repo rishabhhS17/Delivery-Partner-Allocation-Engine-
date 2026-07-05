@@ -139,10 +139,11 @@ export default function OrdersMap() {
     const features = [];
     for (const o of activeOrders) {
       if (o.status !== 'ASSIGNED') continue;
+      const rider   = riderByOrder.get(o._id?.toString());
+      if (!rider) continue;   // no live rider → don't draw an orphaned route
       const live    = routes.get(o._id?.toString());
       const full    = live?.leg1Coords ?? o.leg1Coords ?? [];
-      const rider   = riderByOrder.get(o._id?.toString());
-      const stepIdx = rider?.legStepIndex ?? 0;
+      const stepIdx = rider.legStepIndex ?? 0;
       const coords  = full.slice(stepIdx);
       if (coords.length >= 2) {
         features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} });
@@ -155,10 +156,11 @@ export default function OrdersMap() {
     const features = [];
     for (const o of activeOrders) {
       if (o.status !== 'PICKED_UP') continue;
+      const rider   = riderByOrder.get(o._id?.toString());
+      if (!rider) continue;   // no live rider → don't draw an orphaned route
       const live    = routes.get(o._id?.toString());
       const full    = live?.leg2Coords ?? o.leg2Coords ?? [];
-      const rider   = riderByOrder.get(o._id?.toString());
-      const stepIdx = rider?.legStepIndex ?? 0;
+      const stepIdx = rider.legStepIndex ?? 0;
       const coords  = full.slice(stepIdx);
       if (coords.length >= 2) {
         features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} });

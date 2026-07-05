@@ -78,7 +78,9 @@ export default function OrderMap() {
   );
 
   const leg1Geojson = useMemo(() => {
-    if (!order || order.status !== 'ASSIGNED') return { type: 'FeatureCollection', features: [] };
+    // Only draw a leg when its live rider is present — otherwise a stale/just-delivered order's
+    // persisted coords would render an orphaned line with no rider pin on it.
+    if (!order || order.status !== 'ASSIGNED' || !assignedRider) return { type: 'FeatureCollection', features: [] };
     const live    = routes.get(id);
     const full    = live?.leg1Coords ?? order.leg1Coords ?? [];
     const stepIdx = assignedRider?.legStepIndex ?? 0;
@@ -92,7 +94,7 @@ export default function OrderMap() {
   }, [order, assignedRider, routes, id]);
 
   const leg2Geojson = useMemo(() => {
-    if (!order) return { type: 'FeatureCollection', features: [] };
+    if (!order || !assignedRider) return { type: 'FeatureCollection', features: [] };
     const live    = routes.get(id);
     const full    = live?.leg2Coords ?? order.leg2Coords ?? [];
     const stepIdx = order.status === 'PICKED_UP' ? (assignedRider?.legStepIndex ?? 0) : 0;
