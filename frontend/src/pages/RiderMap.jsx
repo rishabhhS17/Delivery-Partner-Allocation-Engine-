@@ -104,7 +104,11 @@ export default function RiderMap() {
 
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
-    if (map) addLabelPillImage(map);
+    if (!map) return;
+    addLabelPillImage(map);
+    map.on('styleimagemissing', (e) => {
+      if (e.id === 'dpae-label-pill') addLabelPillImage(map);
+    });
     syncUnclustered();
   }, [syncUnclustered]);
 

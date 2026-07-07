@@ -81,7 +81,11 @@ export default function OrdersMap() {
 
   const handleLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
-    if (map) addLabelPillImage(map);
+    if (!map) return;
+    addLabelPillImage(map);
+    map.on('styleimagemissing', (e) => {
+      if (e.id === 'dpae-label-pill') addLabelPillImage(map);
+    });
   }, []);
 
   const handleMouseMove = useCallback((e) => {
