@@ -15,7 +15,10 @@ export const getRider   = (id) => api.get(`/riders/${id}`);
 export const createRider = (body) => api.post('/riders', body);
 
 // Restaurants
-export const getRestaurants   = () => api.get('/restaurants').then(r => ({ data: r.data?.data ?? r.data }));
+// Pass { lat, lng } to restrict results to restaurants within a customer's H3
+// service area; omit it to list all restaurants (admin view).
+export const getRestaurants   = (params) =>
+  api.get('/restaurants', { params }).then(r => ({ data: r.data?.data ?? r.data }));
 export const createRestaurant = (body) => api.post('/restaurants', body);
 export const deleteRestaurant = (id)   => api.delete(`/restaurants/${id}`);
 

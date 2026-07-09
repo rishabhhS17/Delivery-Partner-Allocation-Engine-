@@ -91,7 +91,14 @@ export default function Customers() {
   };
 
   const handlePlaceOrder = (customer) => {
-    navigate('/orders', { state: { prefillCustomerId: customer._id, prefillCustomerName: customer.name } });
+    navigate('/orders', {
+      state: {
+        prefillCustomerId: customer._id,
+        prefillCustomerName: customer.name,
+        prefillCustomerLat: customer.latitude,
+        prefillCustomerLng: customer.longitude,
+      },
+    });
   };
 
   return (

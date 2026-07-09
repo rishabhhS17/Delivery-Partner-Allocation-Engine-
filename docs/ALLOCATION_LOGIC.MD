@@ -77,8 +77,14 @@ When an order arrives for a restaurant:
 
 ```
 restaurantHex  = h3.latLngToCell(restaurant.lat, restaurant.lng, 7)
-candidateZone  = h3.gridDisk(restaurantHex, 2)          // 19 hexagons, ~4–5 km
+candidateZone  = h3.gridDisk(restaurantHex, H3_CANDIDATE_K)   // constants.js: k=20 (~40 km)
 ```
+
+> **Note on `H3_CANDIDATE_K = 20` (~40 km):** this is an intentionally wide "never
+> miss a rider" net for the demo. With only ~32 riders, casting a wide zone and
+> letting ETAR scoring rank them guarantees an order can always find *someone*. It is
+> **not** a realistic dispatch radius — see "Candidate radius sizing" below for what a
+> production system uses.
 
 A rider is in the **geo-candidate pool** if ALL three conditions hold:
 - Their pre-computed `h3Index` (stored on the Rider document at resolution 7) is contained in `candidateZone`
@@ -97,6 +103,41 @@ A rider is in the **geo-candidate pool** if ALL three conditions hold:
 
 **This lookup is performed against the in-memory H3 bucket map, not a MongoDB
 query.** See §2.1 below for the in-memory index architecture.
+
+### Candidate radius sizing (real-world)
+
+A grid-disk is a **hexagon, not a circle**, so two radii matter:
+
+- **Guaranteed radius** — every rider within it is definitely in the candidate set
+  (worst-case, toward a hex corner).
+- **Max reach** — the farthest a covered cell extends (on-axis).
+
+A candidate filter must never produce false negatives (a reachable rider you didn't
+consider), so you size it to the **guaranteed** radius, then trim the excess with an
+exact cutoff. Measured coverage at resolution 7 (distance from center to each disk
+cell centre):
+
+| choice | cells | guaranteed (all dirs) | max reach |
+|--------|-------|-----------------------|-----------|
+| res 7, k=2 | 19 | ~3.5 km | ~6.0 km |
+| **res 7, k=3** | **37** | **~5.9 km** | **~8.5 km** |
+| res 7, k=4 | 61 | ~8.2 km | ~11.0 km |
+| res 8, k=8 | 217 | ~6.5 km | ~7.7 km |
+| res 8, k=9 | 271 | ~7.4 km | ~8.7 km |
+
+**For a realistic 5–8 km dispatch radius: resolution 7, k=3.** Its guaranteed floor
+(~5.9 km) and max reach (~8.5 km) land squarely on the 5–8 km band with only 37 cells.
+Then refine the ~37-cell candidate set with an exact cutoff — straight-line
+`haversine ≤ 8 km`, or better, road-ETA via `getRoute` (`routingService.js`) so a
+rider 6 km away across a river isn't treated as close.
+
+Resolution 8 only buys a rounder boundary (max reach closer to guaranteed) at 6–7× the
+cells scanned per query — precision the exact-refine step already provides, so it isn't
+worth the cost here.
+
+> The demo deliberately keeps `H3_CANDIDATE_K = 20` (~40 km) with no refine, for
+> guaranteed coverage given its tiny fleet. A production deployment would set k=3 and
+> add the exact ≤8 km / ETA refine.
 
 ### Order Generation Service Area Constraint
 

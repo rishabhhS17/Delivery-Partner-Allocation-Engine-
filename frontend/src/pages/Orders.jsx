@@ -59,12 +59,13 @@ export default function Orders() {
   // dialog pre-filled with that customer. Clear the router state so a page refresh/back-nav
   // doesn't re-trigger it.
   useEffect(() => {
-    const { prefillCustomerId, prefillCustomerName } = location.state ?? {};
+    const { prefillCustomerId, prefillCustomerName, prefillCustomerLat, prefillCustomerLng } = location.state ?? {};
     if (!prefillCustomerId) return;
 
     setPrefillCustomer({ id: prefillCustomerId, name: prefillCustomerName });
     setPlaceOrderOpen(true);
-    getRestaurants()
+    // Only restaurants within this customer's H3 service area are orderable.
+    getRestaurants({ lat: prefillCustomerLat, lng: prefillCustomerLng })
       .then((res) => setRestaurants(res.data ?? []))
       .catch(() => toast.error('Could not load restaurants'));
 
@@ -214,10 +215,15 @@ export default function Orders() {
             onChange={(e) => setSelectedRestaurantId(e.target.value)}
             size="small"
             fullWidth
+            disabled={restaurants.length === 0}
           >
-            {restaurants.map((r) => (
-              <MenuItem key={r._id} value={r._id}>{r.name}</MenuItem>
-            ))}
+            {restaurants.length === 0 ? (
+              <MenuItem value="" disabled>No restaurants serviceable near this customer</MenuItem>
+            ) : (
+              restaurants.map((r) => (
+                <MenuItem key={r._id} value={r._id}>{r.name}</MenuItem>
+              ))
+            )}
           </TextField>
         </DialogContent>
         <DialogActions>

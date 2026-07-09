@@ -1,6 +1,9 @@
 export const H3_RESOLUTION          = 7;
 export const H3_CANDIDATE_K         = 20;
 export const H3_SERVICE_AREA_K      = 5;
+// Rings of H3 res-7 cells (~2 km each) that define a customer's restaurant service
+// area — restaurants outside this hexagon disk aren't shown when ordering.
+export const RESTAURANT_SERVICE_K   = 2;
 
 export const RIDER_SPEED_KMH        = 40;
 export const TICK_INTERVAL_MS       = 1000;
