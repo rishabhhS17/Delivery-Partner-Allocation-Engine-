@@ -6,6 +6,7 @@ import {
   RIDER_SPEED_KMH,
   TICK_INTERVAL_MS,
   H3_RESOLUTION,
+  ORDER_TTL_MS,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import Rider from '../models/Rider.js';
@@ -157,17 +158,18 @@ async function _healOrphanedRiders() {
       { _id: { $in: orphanedIds } },
       { status: 'IDLE', currentOrderId: null, activeOrders: 0 }
     ),
-    // ASSIGNED orders with no rider in-flight → re-queue as PENDING
+    // ASSIGNED orders with no rider in-flight → re-queue as PENDING.
+    // queuedAt is reset so the TTL clock measures the fresh wait, not the original one.
     Order.updateMany(
       { assignedRiderId: { $in: orphanedIds }, status: 'ASSIGNED' },
-      { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
+      { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date() } }
     ),
     // PICKED_UP orders with no rider in-flight → re-queue as PENDING so a fresh rider
     // re-delivers them (a simulation has no real collected food to strand, and this avoids
     // tagging a recoverable order CANCELLED).
     Order.updateMany(
       { assignedRiderId: { $in: orphanedIds }, status: 'PICKED_UP' },
-      { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
+      { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date() } }
     ),
   ]);
 }
@@ -201,7 +203,7 @@ async function _healOrphanedOrders() {
       console.warn(`[sim] re-queuing ${toRequeue.length} orphaned ASSIGNED order(s) → PENDING`);
       await Order.updateMany(
         { _id: { $in: toRequeue.map(o => o._id) } },
-        { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
+        { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date() } }
       );
     }
   }
@@ -221,7 +223,7 @@ async function _healOrphanedOrders() {
   console.warn(`[sim] re-queuing ${stuckOrphans.length} stuck PICKED_UP order(s) → PENDING`);
   await Order.updateMany(
     { _id: { $in: stuckOrphans.map(o => o._id) } },
-    { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null } }
+    { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date() } }
   );
 }
 
@@ -252,9 +254,10 @@ async function _sweepOrphanedOrders() {
     const wasStatus     = ord.status;
     ord.status          = 'PENDING';
     ord.assignedRiderId = null;
+    ord.queuedAt        = new Date(); // reset TTL clock for the fresh wait
     pendingQueue.set(idStr, ord); // hand back to the tick for reallocation
     await Order.findByIdAndUpdate(ord._id, {
-      status: 'PENDING', assignedRiderId: null, assignedAt: null,
+      status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: ord.queuedAt,
     }).catch(err => console.error('[sim] orphan requeue write failed:', err.message));
     console.warn(`[sim] runtime orphan swept → re-queued ${wasStatus} order`, idStr);
   }
@@ -462,6 +465,25 @@ function tick() {
                         : rider.status === 'PICKED_UP' ? 'leg2'
                         : null,
     });
+  }
+
+  // Phase 1.5 — drop orders that have waited too long for a rider → CANCELLED.
+  // An order with no serviceable rider would otherwise sit in pendingQueue forever;
+  // once it has waited ORDER_TTL_MS (measured from queuedAt — reset on every →PENDING
+  // transition, so this is continuous time spent waiting) we drop it out of the queue
+  // and mark it CANCELLED. This only removes never-served orders; allocation, movement,
+  // and the rider state machine are untouched.
+  const ttlCutoff = now - ORDER_TTL_MS;
+  for (const [orderId, order] of pendingQueue) {
+    const waitingSince = (order.queuedAt ?? order.createdAt)?.getTime?.() ?? now;
+    if (waitingSince > ttlCutoff) continue;
+
+    pendingQueue.delete(orderId);
+    Order.findByIdAndUpdate(order._id, {
+      status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null,
+    }).catch(err => console.error('[sim] TTL cancel write failed:', err.message));
+    if (ioRef) ioRef.emit('order:cancelled', { orderId, reason: 'no_rider' });
+    console.warn('[sim] order TTL expired → CANCELLED', orderId);
   }
 
   // Phase 2 — allocate pending orders to IDLE riders

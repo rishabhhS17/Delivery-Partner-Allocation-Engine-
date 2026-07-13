@@ -255,8 +255,10 @@ export default function OrdersMap() {
                 </Marker>
               ))}
 
-              {/* Riders — rendered last so they appear above order markers */}
-              {riders.map((r) => (
+              {/* Active riders only (ACCEPTED / PICKED_UP carry an orderId) — the full
+                  fleet lives on the Rider Map, so the Order Map isn't redundant with it.
+                  Rendered last so they appear above order markers. */}
+              {riders.filter((r) => r.orderId).map((r) => (
                 <Marker key={r._id} longitude={r.lng} latitude={r.lat} anchor="center">
                   <RiderMarker rider={r} />
                 </Marker>

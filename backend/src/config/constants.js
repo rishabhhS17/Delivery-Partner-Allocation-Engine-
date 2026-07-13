@@ -7,6 +7,9 @@ export const RESTAURANT_SERVICE_K   = 2;
 
 export const RIDER_SPEED_KMH        = 40;
 export const TICK_INTERVAL_MS       = 1000;
+// Max wall-clock time an order may sit PENDING (waiting for a rider) before it is
+// dropped and marked CANCELLED. Tunable; kept short so it is observable in a demo.
+export const ORDER_TTL_MS           = 180_000; // 180 s
 export const RIDER_SEED_COUNT       = 32;
 export const AUTO_ORDER_INTERVAL_MS = 600_000;
 export const LOAD_WINDOW_MINUTES    = 60;
