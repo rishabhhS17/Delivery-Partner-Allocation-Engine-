@@ -144,3 +144,72 @@ tens of KB; `.lean()` removes hydration overhead. Expected: ~8 s → <300 ms.
 The `orders` collection grows unbounded (all DELIVERED/CANCELLED kept forever). Fine for
 a demo even after this fix; if the table ever feels heavy, add pagination/limit to
 `getAllOrders` + the Orders table.
+
+---
+
+## 4. RBAC (roles + owner approval) + Audit Log — FUTURE WORK
+
+**Problem today:** authentication is decorative. Anyone can register, every user lands
+on the **same admin page**, and every user sees **the same data** with the same
+privileges. There is no role separation and no way to gate who gets in, so the login
+step carries no real meaning. There is also no record of who created or deleted riders,
+customers, or restaurants.
+
+**Desired behavior:** give authentication teeth with a two-role model plus an
+owner-gated approval flow, and add an audit trail for entity lifecycle changes.
+
+### 4a. Roles
+
+Two roles, enforced on **both** backend routes and frontend navigation:
+
+- **Guest** — read-only, limited surface. May view only:
+  - Dashboard
+  - Rider Map
+  - Order Map
+  - Orders page
+  - Customers page
+
+  Every other page (and every mutating / admin-only route) is hidden and blocked.
+- **Admin (owner)** — full access, unchanged from today's single view. Can also
+  approve/deny access requests (4b) and see the audit log (4c).
+
+Enforcement is layered so the frontend gate is cosmetic and the backend is the real
+authority:
+- **Backend:** add a `role` field to the user model (`'guest' | 'admin'`, default
+  `guest`) and a `requireRole('admin')` middleware on all admin-only + mutating routes.
+- **Frontend:** role-aware route guard + nav — Guest sessions only render the five
+  allowed pages; direct URL access to any other page redirects.
+
+### 4b. Registration → owner approval flow
+
+- One or more **admin** users exist (seeded / promoted; the first account or an
+  env-designated email is admin).
+- When a **non-admin** registers, the account is created in a **pending** state and
+  **cannot log in yet**. An access request is raised and **broadcast to all owners**
+  (admins).
+- Each owner sees pending requests and can **grant** (promote pending → guest, account
+  activated) or **deny** (reject the request). No self-service access — an owner must
+  approve before anyone gets in.
+- This is what makes authentication meaningful: registration is a *request*, not an
+  automatic grant.
+
+### 4c. Audit Log
+
+A new **Audit Log** page/section (admin-only) that records **who did what, when** for
+entity lifecycle events:
+
+- **Tracked events:** a **rider, customer, or restaurant** is **added** or **removed**.
+- **Per entry:** timestamp, actor (user id/name + role), action (`CREATE` / `DELETE`),
+  entity type (`RIDER` / `CUSTOMER` / `RESTAURANT`), entity id, and a short label
+  (e.g. entity name) for readability.
+- **Storage:** append-only `AuditLog` collection written from the create/delete
+  controllers (or a small shared helper so every mutation logs consistently). Never
+  edited in place.
+- **View:** admin-only Audit Log page — reverse-chronological table, filterable by
+  entity type and action.
+
+### Out of scope (for this future item, until scoped)
+
+- No granular per-page permission matrix beyond the two roles above.
+- No audit logging for reads or for order/allocation events — entity add/remove only.
+- No email/push on approval requests — in-app owner view is enough for the demo.
