@@ -142,7 +142,7 @@ export default function Dashboard() {
         <Box className={styles.heroInner}>
           <Box className={styles.heroContent}>
             <Typography component="h1" className={styles.heroTitle}>Live Delivery Intelligence</Typography>
-            <Typography className={styles.heroSubtitle}>AI-Powered Delivery Intelligence</Typography>
+            <Typography className={styles.heroSubtitle}>Real-Time Delivery Allocation Engine</Typography>
           </Box>
 
           <Box className={styles.heroStats}>

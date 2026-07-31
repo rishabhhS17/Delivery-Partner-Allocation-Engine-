@@ -65,7 +65,11 @@ export const getAllOrders = async (req, res, next) => {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const orders = await Order.find(filter).sort({ createdAt: -1 }).populate('assignedRiderId', 'name');
+    const orders = await Order.find(filter)
+      .sort({ createdAt: -1 })
+      .select('-polyline -leg1Coords -leg2Coords')  // table doesn't use them; map gets them live over the socket
+      .populate('assignedRiderId', 'name')
+      .lean();
     res.json({ success: true, data: orders });
   } catch (err) {
     next(err);

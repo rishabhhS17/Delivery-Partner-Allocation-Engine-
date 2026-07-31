@@ -1,10 +1,10 @@
 # 🚀 Delivery Partner Allocation Engine
 
-A full-stack logistics platform that automatically assigns the most suitable delivery rider to each incoming order — inspired by food-delivery systems like Swiggy and Zomato.
+A full-stack, real-time logistics platform that automatically assigns the most suitable delivery rider to each incoming order — inspired by food-delivery dispatch systems like Swiggy and Zomato.
 
-The core of the system is a **deterministic, rule-based allocation engine** that scores every eligible rider against an order and selects the best one. On top of that sits a **live simulation layer** that keeps the app populated with realistic rider movement and order traffic, and an **AI explainability layer** that produces a plain-language reason for every allocation decision.
+The core is a **deterministic, rule-based allocation engine**: it geo-shortlists nearby riders with an **H3 hexagonal spatial index**, scores each on a weighted combination of **predicted time-to-arrival (ETAR), rating, and recent workload**, and assigns the best one. On top sits a **live simulation layer** that animates a fleet of riders along **real road-snapped routes** and generates order traffic, so the system is fully demonstrable without any GPS hardware.
 
-> **Design philosophy:** The allocation logic is fully predictable and reproducible. AI is used *only* to explain decisions — never to make them. The simulation removes the need for real GPS hardware, making the system demonstrable out of the box.
+> **Design philosophy:** every allocation is predictable, reproducible, and fully explainable — each decision stores its complete numeric score breakdown. There is **no AI/ML in the decision loop**; the value is in transparent, inspectable scoring.
 
 ---
 
@@ -12,51 +12,55 @@ The core of the system is a **deterministic, rule-based allocation engine** that
 
 | Area | Highlights |
 |------|-----------|
-| **Smart Allocation** | Weighted scoring across distance, rating & workload — each normalized to 0–1, combined with runtime-configurable weights |
-| **Live Simulation** | ~20 simulated riders animate across a Ranchi map with automatic order generation every 10 min |
-| **Real-time Map** | Rider markers (color-coded by state), restaurant pins, two-leg delivery routes, live position streaming via WebSockets |
-| **AI Explanations** | Every assignment includes a human-readable reason (Gemini API with deterministic template fallback) |
-| **Order Queue** | FIFO backpressure — unserved orders queue up and auto-assign the moment a rider frees up |
-| **Analytics Dashboard** | Counters, avg pickup/delivery time, throughput, per-rider fairness distribution |
-| **Allocation History** | Full audit trail with per-factor score breakdowns |
-| **Admin & Partner Roles** | Admin manages the fleet; delivery partners can log in, update availability, and view assignments |
+| **Geo-aware Allocation** | H3 res-7 hexagonal grid shortlists riders near the restaurant, then weighted scoring picks the winner |
+| **ETAR scoring** | Ranks by *estimated time to availability + travel*, not raw distance — a near-but-busy rider isn't actually faster |
+| **Live Simulation** | ~32 simulated riders animate across a Ranchi map; new orders auto-generate every 10 minutes |
+| **Road-snapped Routing** | Two-leg journeys (rider→restaurant→customer) follow real driving routes via the Mapbox Directions API, with a straight-line fallback |
+| **Real-time Map** | Rider markers color-coded by state, restaurant pins, live route lines, positions streamed over WebSockets (server is the single source of truth) |
+| **Explainable Decisions** | Every assignment records a per-factor score breakdown in an append-only allocation history |
+| **Order Queue + TTL** | Unserved orders queue and auto-assign when a rider frees up; orders that wait too long are dropped as `CANCELLED` |
+| **Batching-lite** | A busy rider can hold a queued next order and chain straight into it after delivering |
+| **Analytics Dashboard** | Throughput, avg pickup/delivery time, per-rider fairness distribution |
+| **Auth & Roles** | JWT-based auth (+ optional Google OAuth); admin fleet management |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                       Frontend                          │
-│  React 18 · Vite · Material UI · Mapbox · Socket.IO    │
-└────────────────────────┬────────────────────────────────┘
-                         │  REST + WebSocket
-┌────────────────────────▼────────────────────────────────┐
-│                       Backend                           │
-│  Node.js · Express · Socket.IO · node-cron · Mongoose   │
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  Allocation  │  │  Simulation  │  │    Order     │  │
-│  │   Engine     │  │    Loop      │  │  Generator   │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│              MongoDB Atlas (Mongoose)                    │
-│  riders · restaurants · customers · orders ·             │
-│  allocationhistory                                      │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                          Frontend                            │
+│   React 18 · Vite · Material UI · Mapbox GL · Socket.IO       │
+└─────────────────────────────┬────────────────────────────────┘
+                              │  REST + WebSocket (JWT-authed)
+┌─────────────────────────────▼────────────────────────────────┐
+│                          Backend                             │
+│   Node.js · Express · Socket.IO · Mongoose · h3-js           │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────┐ │
+│  │ Allocation  │  │ Simulation  │  │   Order     │  │ Route│ │
+│  │  Engine     │  │  Loop (1s)  │  │  Generator  │  │ Svc  │ │
+│  │ (H3 + ETAR) │  │             │  │             │  │      │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └───┬──┘ │
+└──────────────────────────┬──────────────────────────────┼────┘
+                           │                               │
+┌──────────────────────────▼─────────┐        ┌────────────▼──────────┐
+│        MongoDB Atlas (Mongoose)     │        │ Mapbox Directions API  │
+│  riders · restaurants · customers · │        │ (road-snapped routes)  │
+│  orders · allocationhistory · users │        └───────────────────────┘
+└─────────────────────────────────────┘
 ```
 
 ### Backend Modules
 
 | Module | Responsibility |
 |--------|---------------|
-| `config.js` | Bounding box, scoring weights, tick/cron timing |
-| `models.js` | Mongoose schemas — Rider, Restaurant, Order, Customer, AllocationHistory |
-| `allocationEngine.js` | Haversine distance, normalized weighted scoring, reason generation |
-| `orderGenerator.js` | Random order creation (single + bulk) and the auto-order cron |
-| `simulation.js` | Tick loop — queue processing, movement, state machine, WebSocket broadcast |
+| `config/constants.js` | H3 resolution, scoring weights, tick timing, order TTL, rider speed, bounds |
+| `models/*.js` | Mongoose schemas — Rider, Restaurant, Customer, Order, AllocationHistory, User |
+| `services/allocationEngine.js` | H3 candidate cells, ETAR computation, normalized weighted scoring |
+| `services/simulationEngine.js` | Tick loop — queue processing, movement, state machine, TTL cancel, WebSocket broadcast, self-healing |
+| `services/orderGenerator.js` | Random + bulk order creation and the auto-order timer |
+| `services/routingService.js` | Mapbox Directions calls with a route cache, concurrency limit, and timeout |
 
 ---
 
@@ -66,183 +70,167 @@ The core of the system is a **deterministic, rule-based allocation engine** that
 new / pending order
         │
         ▼
-1. FILTER     → keep only ONLINE + IDLE riders       → candidates
+1. GEO-FILTER → H3 res-7 hexagon disk around the restaurant → nearby riders
         │
         ▼
-2. SCORE      → score each candidate 0–1 per factor, → scored list
-               combine with configurable weights
+2. SHORTLIST  → keep ONLINE + IDLE riders in those cells      → candidates
         │
         ▼
-3. SELECT     → pick the highest final score          → winner
+3. SCORE      → ETAR + rating + load, normalized 0–1,          → scored list
+               combined with runtime-configurable weights
         │
         ▼
-4. EXPLAIN    → generate a human-readable reason      → assignment + reason
+4. SELECT     → highest final score wins                       → assignment
+        │       (records full breakdown in allocation history)
+        ▼
+No rider in range? → order waits in the queue (and is CANCELLED after the TTL)
 ```
 
 ### Scoring Model
 
 | Factor | Default Weight | Score (normalized 0–1) |
 |--------|:--------------:|------------------------|
-| **Distance** | 0.45 | Closer to restaurant → higher (`1 − dist/maxDist`, Haversine) |
+| **ETAR** | 0.50 | `1 − etar / maxEtar` — lower estimated time-to-arrival scores higher |
 | **Rating** | 0.30 | `rating / 5` |
-| **Load** | 0.25 | Fewer recent deliveries → higher (fairness/fatigue signal) |
+| **Load** | 0.20 | `1 − recentLoad / maxLoad` — fewer deliveries in the last 60 min scores higher (fairness/fatigue) |
 
 ```
-Final Score = w_distance × DistanceScore + w_rating × RatingScore + w_load × LoadScore
+ETAR = time-until-rider-is-free  +  travel-time-to-restaurant
+Final Score = w_etar × EtarScore + w_rating × RatingScore + w_load × LoadScore
 ```
 
-Weights are **runtime-configurable** by the admin and **normalized to sum to 1** before scoring. No rider available? The order waits in a FIFO queue and is assigned on the next tick.
+Weights are **runtime-configurable** (`PUT /api/config/weights`) and **auto-normalized to sum to 1**. ETAR and load are scored **relative to the candidate pool**, so ranking adapts to whoever is actually nearby.
 
-> See [`docs/ALLOCATION_LOGIC.MD`](docs/ALLOCATION_LOGIC.MD) for worked examples and edge-case handling.
+> **Why ETAR over raw distance?** The nearest rider may already be mid-delivery. ETAR folds in the time to finish their current trip *plus* travel to the restaurant, so "closest" never beats "soonest actually available."
 
 ---
 
-## 🔄 Rider State Machine
+## 🔄 State Machines
 
+**Rider:**
 ```
-IDLE ──assigned──▶ ACCEPTED ──reaches restaurant──▶ PICKED_UP ──reaches customer──▶ DELIVERED
- ▲                 (moving to                       (moving to                        │
- │                  restaurant)                      customer)                        │
- └─────────────────────────── returns to IDLE ◀──────────────────────────────────────┘
+IDLE ──assigned──▶ ACCEPTED ──reaches restaurant──▶ PICKED_UP ──reaches customer──▶ (deliver)
+ ▲                 (leg 1 →                          (leg 2 →                          │
+ │                  restaurant)                        customer)                        │
+ └──────────── returns to IDLE  ◀── or chains into a queued next order ◀────────────────┘
+```
+`availabilityStatus` (`ONLINE` / `OFFLINE`) is separate from movement `status` (`IDLE` / `ACCEPTED` / `PICKED_UP`).
+
+**Order:**
+```
+PENDING ─▶ ASSIGNED ─▶ PICKED_UP ─▶ DELIVERED
+   │
+   └─▶ CANCELLED   (waited past ORDER_TTL_MS with no serviceable rider)
 ```
 
-Each tick advances the rider **5 %** of the current leg (completing in ~20 ticks). Positions are updated server-side and streamed to all clients via WebSockets — the backend is the single source of truth.
+Each **1-second tick**, riders advance along their road-snapped polyline at `RIDER_SPEED_KMH`; leg completions trigger the next transition. Positions are computed **server-side** and streamed to every client — no client-side drift. On restart, the engine **rehydrates in-memory state from MongoDB** and self-heals any orphaned orders/riders.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **React 18** — component UI
-- **Vite** — dev server & build
+- **React 18** + **Vite** — UI and build tooling
 - **Material UI** — component library & styling
-- **Mapbox** — map rendering, markers, routes
-- **Axios** — HTTP client
-- **Socket.IO Client** — real-time position/state updates
-- **React Router v6** — client-side routing
+- **Mapbox GL** (`react-map-gl`) — map rendering, markers, route lines
+- **Socket.IO Client** — real-time position/state stream
+- **Axios** · **React Router v6**
 
 ### Backend
 - **Node.js** + **Express** — REST API
-- **Socket.IO** — WebSocket streaming
+- **Socket.IO** — WebSocket streaming (JWT-authenticated handshake)
 - **Mongoose** — MongoDB ODM
-- **node-cron** — scheduled order generation & simulation tick
-- **JWT** — authentication
-- **dotenv** — environment config
+- **h3-js** — H3 hexagonal spatial index (candidate filtering, service areas)
+- **Mapbox Directions API** — road-snapped two-leg routing
+- **JWT** + **Passport** (optional Google OAuth) — auth
+- **helmet** · **express-rate-limit** · **express-mongo-sanitize** — hardening
 
 ### Database
-- **MongoDB Atlas** — riders, restaurants, customers, orders, allocation history
-
-### AI
-- **Gemini API** — natural-language allocation explanations (deterministic template fallback)
+- **MongoDB Atlas** — riders, restaurants, customers, orders, allocation history, users
 
 ### Deployment
-- **Frontend:** Vercel
-- **Backend:** Render
-- **Database:** MongoDB Atlas
+- **Frontend:** Vercel · **Backend:** Render · **Database:** MongoDB Atlas
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
+- **Node.js** ≥ 18 and **npm** ≥ 9
+- A **MongoDB** connection string (Atlas or local)
+- A **Mapbox** access token (used by **both** the frontend map and the backend routing service)
 
-- **Node.js** ≥ 18
-- **npm** ≥ 9
-- A **MongoDB Atlas** connection string (or local MongoDB)
-- A **Mapbox** access token
-- *(Optional)* A **Gemini API** key for AI-powered allocation explanations
-
-### 1. Clone the repository
-
+### 1. Clone
 ```bash
 git clone https://github.com/rishabhhS17/Delivery-Partner-Allocation-Engine-.git
 cd Delivery-Partner-Allocation-Engine-
 ```
 
-### 2. Backend setup
-
+### 2. Backend
 ```bash
 cd backend
 npm install
-```
-
-Create a `.env` file from the example:
-
-```bash
 cp .env.example .env
 ```
-
-Fill in your values:
-
+Fill in `.env`:
 ```env
-PORT=5000
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret_key
-GEMINI_API_KEY=your_gemini_api_key        # optional
+MONGODB_URI=your_mongodb_connection_string   # required
+JWT_SECRET=your_jwt_secret                    # required
+ADMIN_PASSWORD=your_admin_password            # required
+MAPBOX_TOKEN=your_mapbox_token                # required for road-snapped routing
+PORT=5000                                     # optional (default 5000)
+FRONTEND_URL=http://localhost:5173            # optional — needed in production for CORS
+# Optional: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_CALLBACK_URL (Google login)
+# Optional: SMTP_* (unset → OTP/reset codes are logged to the server console)
 ```
-
-Start the server:
-
+Run:
 ```bash
 npm run dev        # development (nodemon)
 npm start          # production
 ```
+The simulation **auto-starts on boot** — seed some riders/restaurants/customers first so the map isn't empty.
 
-### 3. Frontend setup
-
+### 3. Frontend
 ```bash
 cd frontend
 npm install
-```
-
-Create a `.env` file from the example:
-
-```bash
 cp .env.example .env
 ```
-
-Fill in your values:
-
+Fill in `.env`:
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
-VITE_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+VITE_WS_URL=http://localhost:5000
+VITE_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
 ```
-
-Start the dev server:
-
+Run:
 ```bash
-npm run dev
+npm run dev        # http://localhost:5173
 ```
-
-The app will be available at `http://localhost:5173`.
 
 ---
 
 ## 📡 API Reference
 
+All routes are prefixed with `/api`. Everything except `/auth`, `/analytics`, and `/health` requires a **Bearer JWT**.
+
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `POST` | `/riders` | Register a rider |
-| `GET` | `/riders` | List riders |
+| `GET` | `/health` | Liveness check |
+| `POST` | `/auth/register` · `/auth/login` | Auth (+ `/auth/google` OAuth flow) |
+| `GET` | `/analytics` | Dashboard metrics |
+| `POST` `GET` | `/riders` | Create / list riders |
 | `GET` | `/riders/:id` | Rider details |
-| `PUT` | `/riders/:id/location` | Update rider location |
-| `PUT` | `/riders/:id/status` | Update availability / status |
-| `POST` | `/restaurants` | Add a restaurant |
-| `GET` | `/restaurants` | List restaurants |
-| `DELETE` | `/restaurants/:id` | Soft-delete a restaurant |
-| `POST` | `/customers` | Add a customer |
-| `GET` | `/customers` | List customers |
-| `DELETE` | `/customers/:id` | Soft-delete a customer |
-| `POST` | `/orders` | Create an order |
-| `POST` | `/orders/bulk` | Create N orders at once |
-| `GET` | `/orders` | List orders |
-| `GET` | `/orders/:id` | Order details |
-| `POST` | `/allocate-order` | Trigger allocation for an order |
-| `GET` | `/allocation-history` | Allocation audit trail |
-| `GET` | `/config/weights` | Get current scoring weights |
-| `PUT` | `/config/weights` | Update scoring weights |
+| `PUT` | `/riders/:id/location` · `/riders/:id/status` | Update location / availability |
+| `POST` `GET` `DELETE` | `/restaurants` · `/customers` | Create / list / soft-delete |
+| `POST` | `/orders` · `/orders/bulk` | Create one / N orders |
+| `GET` | `/orders` · `/orders/:id` | List / order details |
+| `POST` | `/allocation/allocate` | Manually allocate a PENDING order |
+| `GET` | `/allocation/history` | Paginated allocation audit trail |
+| `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
+| `POST` `GET` | `/simulation/start` · `/simulation/stop` · `/simulation/status` | Control the simulation |
 
-> Live map updates are pushed over a **WebSocket** channel, not polled.
+### WebSocket events (server → client)
+`simulation:status` · `simulation:tick` (rider positions + queue depth) · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled` · `recent:assignments`
 
 ---
 
@@ -251,65 +239,31 @@ The app will be available at `http://localhost:5173`.
 ```
 Delivery-Partner-Allocation-Engine-/
 ├── backend/
-│   ├── src/
-│   │   ├── config/          # App config, scoring weights, bounding box
-│   │   ├── controllers/     # Route handlers
-│   │   ├── middleware/       # Auth, error handling
-│   │   ├── models/          # Mongoose schemas
-│   │   ├── routes/          # Express route definitions
-│   │   ├── services/        # Allocation engine, simulation, order generator
-│   │   ├── utils/           # Haversine, helpers
-│   │   ├── validators/      # Request validation
-│   │   ├── tests/           # Test suites
-│   │   ├── app.js           # Express app setup
-│   │   └── server.js        # Entry point
-│   ├── .env.example
-│   └── package.json
+│   └── src/
+│       ├── config/          # constants (weights, H3, TTL), db, env, passport
+│       ├── controllers/     # route handlers
+│       ├── middleware/       # auth, error handling
+│       ├── models/          # Mongoose schemas
+│       ├── routes/          # Express route definitions
+│       ├── services/        # allocationEngine, simulationEngine, orderGenerator, routingService
+│       ├── utils/           # haversine, helpers
+│       ├── validators/      # request validation
+│       ├── tests/           # test suites
+│       ├── app.js           # Express app (CORS, helmet, rate limit)
+│       └── server.js        # HTTP + Socket.IO entry point
 ├── frontend/
-│   ├── src/
-│   │   ├── api/             # Axios service layer
-│   │   ├── assets/          # Static assets
-│   │   ├── components/      # Reusable UI components
-│   │   ├── config/          # Frontend config
-│   │   ├── context/         # React context providers
-│   │   ├── hooks/           # Custom hooks
-│   │   ├── layouts/         # Page layouts
-│   │   ├── pages/           # Route-level page components
-│   │   ├── routes/          # Route definitions
-│   │   ├── services/        # Socket.IO, business logic
-│   │   ├── theme/           # MUI theme customization
-│   │   ├── utils/           # Helpers
-│   │   ├── App.jsx          # Root component
-│   │   └── main.jsx         # Entry point
-│   ├── .env.example
-│   ├── vite.config.js
-│   └── package.json
-├── docs/                    # Detailed design documentation
-│   ├── ALLOCATION_LOGIC.MD  # Scoring pipeline, worked examples
-│   ├── API_ENDPOINTS.MD     # Full API surface
-│   ├── APPLICATION_FLOW.MD  # End-to-end system flow
-│   ├── DATABASE_DESIGN.MD   # Collections, schemas, indexes
-│   ├── FEATURES.MD          # Feature catalogue (core + enhancements)
-│   ├── FRONTEND_PAGES.MD    # Build phases & page breakdown
-│   └── PROJECT_SPEC.MD      # Full project specification
+│   └── src/
+│       ├── api/             # Axios layer + endpoints
+│       ├── components/      # common · map · navigation
+│       ├── config/          # navigation config
+│       ├── context/         # Auth + Simulation (socket) providers
+│       ├── layouts/         # app layout
+│       ├── pages/           # route-level pages (maps, dashboard, tables)
+│       ├── routes/          # route definitions + guards
+│       ├── theme/           # MUI theme
+│       └── utils/           # helpers
 └── README.md
 ```
-
----
-
-## 📚 Documentation
-
-Detailed design docs live in the [`docs/`](docs/) folder:
-
-| Document | What it covers |
-|----------|---------------|
-| [**PROJECT_SPEC.MD**](docs/PROJECT_SPEC.MD) | Full specification — how the system works, design decisions, architecture |
-| [**ALLOCATION_LOGIC.MD**](docs/ALLOCATION_LOGIC.MD) | Scoring pipeline, normalization, worked examples, edge cases |
-| [**APPLICATION_FLOW.MD**](docs/APPLICATION_FLOW.MD) | End-to-end flow — startup, simulation loop, order lifecycle |
-| [**DATABASE_DESIGN.MD**](docs/DATABASE_DESIGN.MD) | MongoDB collections, schemas, relationships, indexes |
-| [**FEATURES.MD**](docs/FEATURES.MD) | Feature catalogue — core requirements + stretch enhancements |
-| [**FRONTEND_PAGES.MD**](docs/FRONTEND_PAGES.MD) | Build phases (MVP → depth → polish) and page breakdown |
-| [**API_ENDPOINTS.MD**](docs/API_ENDPOINTS.MD) | REST API surface + WebSocket channel |
 
 ---
 
@@ -317,25 +271,32 @@ Detailed design docs live in the [`docs/`](docs/) folder:
 
 | Decision | Rationale |
 |----------|-----------|
-| **Weighted scoring with normalization** | Different factors (km, 1–5 rating, delivery count) use different scales — normalize to 0–1 first, then weight |
-| **Availability as a filter, not a weight** | Every candidate is already available, so an availability score would be constant (1.0) and useless |
-| **Load = recent workload** | With one order per rider, current active orders is always 0 for eligible riders — recent deliveries in a rolling window is a meaningful fairness signal |
-| **Snapshot pattern for orders** | Restaurant/customer name + coords are copied onto the order so historical data survives deletions |
-| **Deterministic core, AI on the edge** | The engine is rule-based and reproducible; AI only rephrases the "why" afterward |
-| **Server-side movement** | Positions are computed on the backend (single source of truth) and streamed — no client drift |
+| **H3 hexagonal geo-filter** | Shortlist riders near the restaurant in ~O(1) instead of scanning the whole fleet — the same spatial-index idea real dispatchers use (chosen over Redis GEO because uniform hexagons double as demand/surge zones) |
+| **ETAR instead of raw distance** | "Closest" ≠ "soonest available" — ETAR adds the time to finish a current delivery, so busy-but-near riders don't win falsely |
+| **Relative normalization** | ETAR and load are scored against the live candidate pool, so ranking adapts to whoever is actually nearby |
+| **Deterministic, explainable core** | Every allocation stores its full numeric breakdown; decisions are reproducible with no black-box model |
+| **Server-authoritative movement** | Positions computed on the backend and streamed — one source of truth, no client drift |
+| **Road-snapped routing with fallback** | Mapbox Directions for realism; a straight-line lerp covers the gap until the route resolves, so movement never stalls |
+| **TTL cancellation** | Never-servable orders are dropped as `CANCELLED` instead of retrying forever |
+| **Snapshot pattern for orders** | Restaurant/customer name + coords are copied onto the order so history survives deletions |
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Weight-tuning sliders on the live map
-- [ ] Reassignment on rider failure (self-healing delivery)
-- [ ] SLA / stale-order flagging
-- [ ] Candidate comparison (why the winner beat the runner-up)
-- [ ] Queue-depth-over-time chart
-- [ ] Order cancellation
-- [ ] Redis-backed order queue (BullMQ) for higher scale
-- [ ] Road-distance routing (replace Haversine straight-line)
+**Done**
+- [x] H3 hexagonal geo-filtering for candidate selection
+- [x] Road-distance routing (Mapbox Directions, replacing straight-line)
+- [x] Order TTL cancellation
+- [x] ETAR-based predictive scoring
+
+**Next — toward production scale**
+- [ ] Stateless services with **Redis-backed shared state** (geo-index, pending queue, atomic assignment locks) for horizontal scaling
+- [ ] **Event-driven dispatch** (decouple order intake from allocation)
+- [ ] True multi-order **batching** (one rider, multiple drops)
+- [ ] **Food-prep time + "just-in-time"** dispatch (rider waits at restaurant until ready)
+- [ ] **Demand/surge heatmap** over the H3 grid
+- [ ] Weight-tuning sliders on the live map · candidate comparison (why the winner beat the runner-up)
 
 ---
 

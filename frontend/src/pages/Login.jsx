@@ -46,7 +46,7 @@ export default function Login() {
       <Card elevation={0} className={styles.card}>
         <Box>
           <Logo variant="full" size="lg" className={styles.title} />
-          <Typography className={styles.tagline}>AI-Powered Delivery Intelligence</Typography>
+          <Typography className={styles.tagline}>Real-Time Delivery Allocation Engine</Typography>
         </Box>
 
         <form className={styles.form} onSubmit={handleSubmit}>

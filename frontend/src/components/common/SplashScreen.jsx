@@ -3,7 +3,7 @@ import Logo from './Logo';
 import styles from './SplashScreen.module.css';
 
 const PHASES = [
-  'Initializing AI Engine…',
+  'Initializing Allocation Engine…',
   'Loading Delivery Network…',
   'Synchronizing Riders…',
   'Preparing Dashboard…',
@@ -22,7 +22,7 @@ export default function SplashScreen() {
   return (
     <div className={styles.splash}>
       <Logo variant="full" size="lg" />
-      <p className={styles.tagline}>AI-Powered Delivery Intelligence</p>
+      <p className={styles.tagline}>Real-Time Delivery Allocation Engine</p>
       <p className={styles.phase}>{PHASES[phase]}</p>
     </div>
   );
