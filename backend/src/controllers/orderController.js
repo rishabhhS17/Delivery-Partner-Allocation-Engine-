@@ -65,8 +65,16 @@ export const getAllOrders = async (req, res, next) => {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
+    // Cap results. Orders accumulate indefinitely in the simulation (DELIVERED /
+    // CANCELLED are never deleted), so an unbounded find() made both the DB sort
+    // and the JSON payload grow without limit — the main cause of the Orders page
+    // being slow, especially over the deployed network hop. The table only ever
+    // shows recent activity, so return the most recent N.
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 200);
+
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
+      .limit(limit)
       .select('-polyline -leg1Coords -leg2Coords')  // table doesn't use them; map gets them live over the socket
       .populate('assignedRiderId', 'name')
       .lean();

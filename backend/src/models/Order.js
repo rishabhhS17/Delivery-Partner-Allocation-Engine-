@@ -33,5 +33,9 @@ const OrderSchema = new mongoose.Schema(
 
 OrderSchema.index({ status: 1, createdAt: 1 });
 OrderSchema.index({ assignedRiderId: 1, deliveredAt: 1 });
+// Default Orders view sorts by createdAt desc with no status filter; this index
+// lets Mongo serve the "most recent N" query as a cheap index scan instead of an
+// in-memory sort of the whole collection.
+OrderSchema.index({ createdAt: -1 });
 
 export default mongoose.model('Order', OrderSchema);
