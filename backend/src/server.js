@@ -1,7 +1,7 @@
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import app from './app.js';
+import { createServer } from 'http'; // Node's raw HTTP server
+import { Server } from 'socket.io'; // real-time WebSocket layer
+import jwt from 'jsonwebtoken'; // to verify auth tokens
+import app from './app.js'; // your Express app (all the REST routes)
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
 import { initSimulation, startSimulation } from './services/simulationEngine.js';
@@ -41,7 +41,7 @@ const PORT = config.port;
 // Free the port cleanly on nodemon restart so EADDRINUSE never occurs
 const shutdown = () => httpServer.close(() => process.exit(0));
 process.on('SIGTERM', shutdown);
-process.on('SIGINT',  shutdown);
+process.on('SIGINT', shutdown);
 
 httpServer.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {

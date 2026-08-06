@@ -13,7 +13,6 @@ show it in the simulation, it doesn't count.
 ## 0. What we have today (the baseline)
 
 Each rider is a **strict two-leg state machine** (`simulationEngine.js`):
-
 ```
 IDLE ──assign──▶ ACCEPTED ──arrive restaurant──▶ PICKED_UP ──arrive customer──▶ DELIVERED
                  (leg 1: rider→restaurant)        (leg 2: restaurant→customer)
