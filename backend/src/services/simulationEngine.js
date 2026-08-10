@@ -5,8 +5,8 @@ import {
   getWeights,
   RIDER_SPEED_KMH,
   TICK_INTERVAL_MS,
-  H3_RESOLUTION,
-  ORDER_TTL_MS,
+  getH3Config,
+  getOrderTtl,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import Rider from '../models/Rider.js';
@@ -315,7 +315,7 @@ async function hydrate() {
         entry.lat  = originLat + t * (ord.restaurantLat - originLat);
         entry.lng  = originLng + t * (ord.restaurantLng - originLng);
       }
-      entry.h3Index = latLngToCell(entry.lat, entry.lng, H3_RESOLUTION);
+      entry.h3Index = latLngToCell(entry.lat, entry.lng, getH3Config().resolution);
 
     } else if (rider.status === 'PICKED_UP' && rider.currentOrderId) {
       const ord        = rider.currentOrderId;
@@ -346,7 +346,7 @@ async function hydrate() {
         entry.lat = ord.restaurantLat + t * (ord.customerLat - ord.restaurantLat);
         entry.lng = ord.restaurantLng + t * (ord.customerLng - ord.restaurantLng);
       }
-      entry.h3Index = latLngToCell(entry.lat, entry.lng, H3_RESOLUTION);
+      entry.h3Index = latLngToCell(entry.lat, entry.lng, getH3Config().resolution);
 
     } else {
       _addToH3(id, entry.h3Index);
@@ -388,7 +388,7 @@ function _buildEntry(rider) {
     lng:     rider.longitude,
     homeLat: rider.latitude,
     homeLng: rider.longitude,
-    h3Index: rider.h3Index ?? latLngToCell(rider.latitude, rider.longitude, H3_RESOLUTION),
+    h3Index: rider.h3Index ?? latLngToCell(rider.latitude, rider.longitude, getH3Config().resolution),
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
     rating:  rider.rating,
@@ -439,7 +439,7 @@ function tick() {
         legComplete = t >= 1;
       }
 
-      rider.h3Index = latLngToCell(rider.lat, rider.lng, H3_RESOLUTION);
+      rider.h3Index = latLngToCell(rider.lat, rider.lng, getH3Config().resolution);
 
       if (legComplete) {
         rider.lat = rider.legDestLat;
@@ -473,7 +473,7 @@ function tick() {
   // transition, so this is continuous time spent waiting) we drop it out of the queue
   // and mark it CANCELLED. This only removes never-served orders; allocation, movement,
   // and the rider state machine are untouched.
-  const ttlCutoff = now - ORDER_TTL_MS;
+  const ttlCutoff = now - getOrderTtl();
   for (const [orderId, order] of pendingQueue) {
     const waitingSince = (order.queuedAt ?? order.createdAt)?.getTime?.() ?? now;
     if (waitingSince > ttlCutoff) continue;
@@ -655,7 +655,7 @@ function _transitionToPickedUp(riderId, rider, now) {
   rider.legDuration_s = rider.leg2Duration_s;
   rider.lat    = rider.restaurantLat;
   rider.lng    = rider.restaurantLng;
-  rider.h3Index = latLngToCell(rider.lat, rider.lng, H3_RESOLUTION);
+  rider.h3Index = latLngToCell(rider.lat, rider.lng, getH3Config().resolution);
 
   // Switch to leg-2 polyline (empty → lerp fallback takes over until route arrives)
   rider.legCoords              = rider.leg2Coords ?? [];
@@ -690,7 +690,7 @@ function _transitionToDelivered(riderId, rider, now) {
   // Snap to delivery drop-off
   rider.lat     = rider.customerLat;
   rider.lng     = rider.customerLng;
-  rider.h3Index = latLngToCell(rider.lat, rider.lng, H3_RESOLUTION);
+  rider.h3Index = latLngToCell(rider.lat, rider.lng, getH3Config().resolution);
   rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
 
   // Clear current-leg fields
@@ -811,7 +811,7 @@ function _transitionToDelivered(riderId, rider, now) {
     rider.status  = 'IDLE';
     rider.lat     = rider.homeLat;
     rider.lng     = rider.homeLng;
-    rider.h3Index = latLngToCell(rider.homeLat, rider.homeLng, H3_RESOLUTION);
+    rider.h3Index = latLngToCell(rider.homeLat, rider.homeLng, getH3Config().resolution);
     _addToH3(riderId, rider.h3Index);
 
     Rider.findByIdAndUpdate(riderId, {

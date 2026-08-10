@@ -13,6 +13,7 @@ import Orders from '../pages/Orders';
 import RiderMap from '../pages/RiderMap';
 import OrdersMap from '../pages/OrdersMap';
 import OrderMap from '../pages/OrderMap';
+import EntityMap from '../pages/EntityMap';
 import AllocationHistory from '../pages/AllocationHistory';
 import Settings from '../pages/Settings';
 import NotFound from '../pages/NotFound';
@@ -36,6 +37,7 @@ export default function AppRoutes() {
           <Route path="map/riders" element={<RiderMap />} />
           <Route path="map/orders" element={<OrdersMap />} />
           <Route path="map/orders/:id" element={<OrderMap />} />
+          <Route path="map/focus/:type/:id" element={<EntityMap />} />
           <Route path="allocation-history" element={<AllocationHistory />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

@@ -23,6 +23,54 @@ export const RANCHI_BOUNDS = {
   minLng: 85.25, maxLng: 85.45,
 };
 
+// ── Mutable runtime config ───────────────────────────────────────────────────
+// Tunable at runtime via /config without a restart. TTL and the two K radii are read at
+// query time, so changes apply immediately. H3 `resolution` is read wherever a cell is
+// computed, but riders are indexed into h3Buckets at hydration time — so a resolution change
+// only fully takes effect after the simulation is restarted (stop → start re-buckets the fleet).
+
+let currentOrderTtlMs = ORDER_TTL_MS;
+
+export function getOrderTtl() {
+  return currentOrderTtlMs;
+}
+
+export function setOrderTtl(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) throw new Error('TTL must be a positive number of milliseconds');
+  currentOrderTtlMs = Math.round(n);
+}
+
+let currentH3 = {
+  resolution:         H3_RESOLUTION,
+  candidateK:         H3_CANDIDATE_K,
+  restaurantServiceK: RESTAURANT_SERVICE_K,
+};
+
+export function getH3Config() {
+  return currentH3;
+}
+
+export function setH3Config({ resolution, candidateK, restaurantServiceK } = {}) {
+  const next = { ...currentH3 };
+  if (resolution !== undefined) {
+    if (!Number.isInteger(resolution) || resolution < 0 || resolution > 15)
+      throw new Error('resolution must be an integer between 0 and 15');
+    next.resolution = resolution;
+  }
+  if (candidateK !== undefined) {
+    if (!Number.isInteger(candidateK) || candidateK < 0)
+      throw new Error('candidateK must be a non-negative integer');
+    next.candidateK = candidateK;
+  }
+  if (restaurantServiceK !== undefined) {
+    if (!Number.isInteger(restaurantServiceK) || restaurantServiceK < 0)
+      throw new Error('restaurantServiceK must be a non-negative integer');
+    next.restaurantServiceK = restaurantServiceK;
+  }
+  currentH3 = next;
+}
+
 // Mutable runtime weights — updated via PUT /config/weights without a restart
 let currentWeights = { ...DEFAULT_WEIGHTS };
 

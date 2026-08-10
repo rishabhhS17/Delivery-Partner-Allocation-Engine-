@@ -1,5 +1,5 @@
 import { latLngToCell, gridDisk } from 'h3-js';
-import { H3_RESOLUTION, H3_SERVICE_AREA_K, AUTO_ORDER_INTERVAL_MS } from '../config/constants.js';
+import { getH3Config, H3_SERVICE_AREA_K, AUTO_ORDER_INTERVAL_MS } from '../config/constants.js';
 import Restaurant from '../models/Restaurant.js';
 import Customer from '../models/Customer.js';
 import Order from '../models/Order.js';
@@ -11,7 +11,7 @@ async function pickPair() {
   const shuffled = restaurants.sort(() => Math.random() - 0.5);
 
   for (const restaurant of shuffled.slice(0, 10)) {
-    const restaurantHex = latLngToCell(restaurant.latitude, restaurant.longitude, H3_RESOLUTION);
+    const restaurantHex = latLngToCell(restaurant.latitude, restaurant.longitude, getH3Config().resolution);
     const serviceArea = gridDisk(restaurantHex, H3_SERVICE_AREA_K);
     const customers = await Customer.find({ h3Index: { $in: serviceArea }, isActive: true });
     if (!customers.length) continue;

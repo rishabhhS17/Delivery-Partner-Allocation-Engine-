@@ -4,7 +4,7 @@ import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Typography,
 } from '@mui/material';
-import { Trash2, RefreshCw, Plus, ShoppingBag } from 'lucide-react';
+import { Trash2, RefreshCw, Plus, ShoppingBag, MapPin } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import LocationPicker from '../components/common/LocationPicker';
@@ -17,7 +17,7 @@ import { getCustomers, createCustomer, deleteCustomer } from '../api/endpoints';
 import styles from './Customers.module.css';
 
 const EMPTY_FORM = { name: '', phone: '', address: '', latitude: '', longitude: '' };
-const COLUMNS = 8;
+const COLUMNS = 6;
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -118,12 +118,10 @@ export default function Customers() {
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
-              <TableCell>Phone</TableCell>
-              <TableCell>Address</TableCell>
-              <TableCell>Latitude</TableCell>
-              <TableCell>Longitude</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell align="right">Total orders</TableCell>
+              <TableCell align="right">Orders (1h)</TableCell>
               <TableCell align="right">Order</TableCell>
+              <TableCell align="right">Map</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -166,18 +164,16 @@ export default function Customers() {
             {status === 'ready' && customers.map((c) => (
               <TableRow key={c._id}>
                 <TableCell>{c.name}</TableCell>
-                <TableCell>{c.phone}</TableCell>
-                <TableCell>{c.address}</TableCell>
-                <TableCell>{c.latitude}</TableCell>
-                <TableCell>{c.longitude}</TableCell>
-                <TableCell>
-                  <span className={styles.activeBadge} data-active={String(c.isActive)}>
-                    {c.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </TableCell>
+                <TableCell align="right">{c.totalOrders ?? 0}</TableCell>
+                <TableCell align="right">{c.ordersLastHour ?? 0}</TableCell>
                 <TableCell align="right">
                   <IconButton size="small" onClick={() => handlePlaceOrder(c)} aria-label="Place order for this customer" disabled={!c.isActive}>
                     <ShoppingBag size={16} />
+                  </IconButton>
+                </TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => navigate(`/map/focus/customer/${c._id}`)} aria-label="Show customer on map">
+                    <MapPin size={16} />
                   </IconButton>
                 </TableCell>
                 <TableCell align="right">

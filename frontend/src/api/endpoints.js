@@ -40,6 +40,10 @@ export const getAllocationHistory = (params) => api.get('/allocation/history', {
 // Config
 export const getWeights = ()     => api.get('/config/weights');
 export const setWeights = (body) => api.put('/config/weights', body);
+export const getTtl = ()     => api.get('/config/ttl');
+export const setTtl = (body) => api.put('/config/ttl', body);
+export const getH3  = ()     => api.get('/config/h3');
+export const setH3  = (body) => api.put('/config/h3', body);
 
 // Analytics
 export const getAnalytics = (opts = {}) => api.get('/analytics', opts);

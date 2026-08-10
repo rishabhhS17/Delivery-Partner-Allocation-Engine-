@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography,
 } from '@mui/material';
-import { RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw, Plus, MapPin } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 import EmptyState from '../components/common/EmptyState';
@@ -20,6 +21,7 @@ const EMPTY_FORM = { name: '', phone: '', latitude: '', longitude: '', rating: '
 const COLUMNS = 7;
 
 export default function Riders() {
+  const navigate = useNavigate();
   const [riders, setRiders] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -99,11 +101,11 @@ export default function Riders() {
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Rating</TableCell>
-              <TableCell>Availability</TableCell>
               <TableCell>Movement</TableCell>
               <TableCell>Current order</TableCell>
               <TableCell align="right">Total orders</TableCell>
               <TableCell align="right">Orders (1h)</TableCell>
+              <TableCell align="right">Map</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -146,11 +148,6 @@ export default function Riders() {
               <TableRow key={r._id}>
                 <TableCell>{r.name}</TableCell>
                 <TableCell className={styles.rating}>{r.rating}</TableCell>
-                <TableCell>
-                  <span className={styles.availabilityBadge} data-online={String(r.availabilityStatus === 'ONLINE')}>
-                    {r.availabilityStatus === 'ONLINE' ? 'Online' : 'Offline'}
-                  </span>
-                </TableCell>
                 <TableCell><StatusBadge kind="rider" status={r.status} /></TableCell>
                 <TableCell className={styles.rating}>
                   {r.currentOrderSummary
@@ -159,6 +156,9 @@ export default function Riders() {
                 </TableCell>
                 <TableCell align="right">{r.totalOrders ?? 0}</TableCell>
                 <TableCell align="right">{r.ordersLastHour ?? 0}</TableCell>
+                <TableCell align="right">
+                  <Button size="small" startIcon={<MapPin size={14} />} onClick={() => navigate(`/map/focus/rider/${r._id}`)}>Map</Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

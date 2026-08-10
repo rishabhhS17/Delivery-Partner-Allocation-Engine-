@@ -1,21 +1,27 @@
 import { latLngToCell, gridDisk } from 'h3-js';
 import { haversine } from '../utils/haversine.js';
 import {
-  H3_RESOLUTION,
-  H3_CANDIDATE_K,
+  getH3Config,
   RIDER_SPEED_KMH,
   LOAD_WINDOW_MINUTES,
 } from '../config/constants.js';
 
-// Caches gridDisk results keyed by restaurant h3 cell — never invalidates.
-// latLngToCell is O(1); gridDisk(res7, k=2) always returns the same 19 cells
-// for a given restaurant hex, so caching is safe and free.
+// Caches gridDisk results keyed by restaurant h3 cell. Keys are resolution-specific (a cell id
+// encodes its resolution), but a change to candidateK at the same resolution would leave stale
+// disks — so setH3Config() clears this via clearCandidateCache() below.
 const diskCache = new Map();
 
+// Called by the /config/h3 route after setH3Config so the next allocation recomputes candidate
+// rings with the new resolution / candidateK instead of serving cached ones.
+export function clearCandidateCache() {
+  diskCache.clear();
+}
+
 export function getCandidateCells(restaurantLat, restaurantLng) {
-  const cell = latLngToCell(restaurantLat, restaurantLng, H3_RESOLUTION);
+  const { resolution, candidateK } = getH3Config();
+  const cell = latLngToCell(restaurantLat, restaurantLng, resolution);
   if (!diskCache.has(cell)) {
-    diskCache.set(cell, gridDisk(cell, H3_CANDIDATE_K));
+    diskCache.set(cell, gridDisk(cell, candidateK));
   }
   return diskCache.get(cell);
 }

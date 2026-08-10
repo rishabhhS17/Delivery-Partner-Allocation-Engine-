@@ -1,5 +1,5 @@
 import { latLngToCell } from 'h3-js';
-import { H3_RESOLUTION } from '../config/constants.js';
+import { getH3Config } from '../config/constants.js';
 import Rider from '../models/Rider.js';
 import {
   validateRiderCreate,
@@ -40,7 +40,7 @@ export const createRider = async (req, res, next) => {
     if (err) { res.status(400); throw new Error(err); }
 
     const { name, phone, latitude, longitude, rating } = req.body;
-    const h3Index = latLngToCell(latitude, longitude, H3_RESOLUTION);
+    const h3Index = latLngToCell(latitude, longitude, getH3Config().resolution);
 
     const rider = await Rider.create({
       name,
@@ -88,7 +88,7 @@ export const updateLocation = async (req, res, next) => {
     if (err) { res.status(400); throw new Error(err); }
 
     const { latitude, longitude } = req.body;
-    const h3Index = latLngToCell(latitude, longitude, H3_RESOLUTION);
+    const h3Index = latLngToCell(latitude, longitude, getH3Config().resolution);
 
     const rider = await Rider.findByIdAndUpdate(
       req.params.id,

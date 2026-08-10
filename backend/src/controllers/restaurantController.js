@@ -1,7 +1,8 @@
 import { latLngToCell, gridDisk } from 'h3-js';
-import { H3_RESOLUTION, RESTAURANT_SERVICE_K } from '../config/constants.js';
+import { getH3Config } from '../config/constants.js';
 import Restaurant from '../models/Restaurant.js';
 import { validateRestaurantCreate } from '../validators/restaurantValidator.js';
+import { orderCountsByEntity } from './customerController.js';
 
 export const createRestaurant = async (req, res, next) => {
   try {
@@ -9,7 +10,7 @@ export const createRestaurant = async (req, res, next) => {
     if (err) { res.status(400); throw new Error(err); }
 
     const { name, phone, latitude, longitude } = req.body;
-    const h3Index = latLngToCell(latitude, longitude, H3_RESOLUTION);
+    const h3Index = latLngToCell(latitude, longitude, getH3Config().resolution);
 
     const restaurant = await Restaurant.create({ name, phone, latitude, longitude, h3Index });
     res.status(201).json({ success: true, data: restaurant });
@@ -30,13 +31,19 @@ export const getAllRestaurants = async (req, res, next) => {
     const filter = { isActive: true };
 
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      const cell  = latLngToCell(lat, lng, H3_RESOLUTION);
-      const cells = gridDisk(cell, RESTAURANT_SERVICE_K);
+      const { resolution, restaurantServiceK } = getH3Config();
+      const cell  = latLngToCell(lat, lng, resolution);
+      const cells = gridDisk(cell, restaurantServiceK);
       filter.h3Index = { $in: cells };
     }
 
     const restaurants = await Restaurant.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, data: restaurants });
+    const counts = await orderCountsByEntity('restaurantId', restaurants.map((r) => r._id));
+    const data = restaurants.map((r) => {
+      const n = counts.get(String(r._id));
+      return { ...r.toObject(), totalOrders: n?.total ?? 0, ordersLastHour: n?.lastHour ?? 0 };
+    });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }

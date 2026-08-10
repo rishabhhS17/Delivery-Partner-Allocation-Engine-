@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, Typography,
 } from '@mui/material';
-import { Trash2, RefreshCw, Plus } from 'lucide-react';
+import { Trash2, RefreshCw, Plus, MapPin } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import LocationPicker from '../components/common/LocationPicker';
@@ -16,9 +17,10 @@ import { getRestaurants, createRestaurant, deleteRestaurant } from '../api/endpo
 import styles from './Restaurants.module.css';
 
 const EMPTY_FORM = { name: '', phone: '', latitude: '', longitude: '' };
-const COLUMNS = 6;
+const COLUMNS = 5;
 
 export default function Restaurants() {
+  const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -105,10 +107,9 @@ export default function Restaurants() {
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
-              <TableCell>Phone</TableCell>
-              <TableCell>Latitude</TableCell>
-              <TableCell>Longitude</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell align="right">Total orders</TableCell>
+              <TableCell align="right">Orders (1h)</TableCell>
+              <TableCell align="right">Map</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -151,13 +152,12 @@ export default function Restaurants() {
             {status === 'ready' && restaurants.map((r) => (
               <TableRow key={r._id}>
                 <TableCell>{r.name}</TableCell>
-                <TableCell>{r.phone}</TableCell>
-                <TableCell>{r.latitude}</TableCell>
-                <TableCell>{r.longitude}</TableCell>
-                <TableCell>
-                  <span className={styles.activeBadge} data-active={String(r.isActive)}>
-                    {r.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                <TableCell align="right">{r.totalOrders ?? 0}</TableCell>
+                <TableCell align="right">{r.ordersLastHour ?? 0}</TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => navigate(`/map/focus/restaurant/${r._id}`)} aria-label="Show restaurant on map">
+                    <MapPin size={16} />
+                  </IconButton>
                 </TableCell>
                 <TableCell align="right">
                   <IconButton size="small" color="error" onClick={() => handleDelete(r._id, r.name)} aria-label="Remove restaurant">
