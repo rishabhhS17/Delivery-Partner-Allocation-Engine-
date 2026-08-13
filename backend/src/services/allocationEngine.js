@@ -30,7 +30,7 @@ export function getCandidateCells(restaurantLat, restaurantLng) {
  * Pure scoring function — no DB I/O, no side effects.
  *
  * candidates: pre-geo-filtered array of Rider objects.
- *   Each must have: latitude, longitude, status, rating,
+ *   Each must have: latitude, longitude, status,
  *   deliveryTimestamps, currentOrderId (null or populated Order doc
  *   with leg1Duration_s, leg2Duration_s, legStartedAt).
  *
@@ -58,22 +58,18 @@ export function allocateOrder(order, candidates, weights) {
 
   const ranked = scored
     .map(s => {
-      const etarScore   = (solo || maxEtar === 0) ? 1 : 1 - s.etar / maxEtar;
-      const ratingScore = s.rider.rating / 5;
-      const loadScore   = (solo || maxLoad === 0) ? 1 : 1 - s.recentLoad / maxLoad;
-      const finalScore  =
-        weights.etar   * etarScore +
-        weights.rating * ratingScore +
-        weights.load   * loadScore;
+      const etarScore  = (solo || maxEtar === 0) ? 1 : 1 - s.etar / maxEtar;
+      const loadScore  = (solo || maxLoad === 0) ? 1 : 1 - s.recentLoad / maxLoad;
+      const finalScore =
+        weights.etar * etarScore +
+        weights.load * loadScore;
       return {
         rider: s.rider,
         score: finalScore,
         breakdown: {
           etarScore,
-          ratingScore,
           loadScore,
           rawEtar_s: s.etar,
-          rawRating: s.rider.rating,
           rawLoad:   s.recentLoad,
         },
       };

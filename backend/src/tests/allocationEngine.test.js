@@ -11,7 +11,6 @@ function idleRider(overrides = {}) {
     latitude: 23.35,
     longitude: 85.33,
     status: 'IDLE',
-    rating: 4,
     deliveryTimestamps: [],
     currentOrderId: null,
     ...overrides,
@@ -39,15 +38,15 @@ test('allocateOrder picks the rider with the best composite score', () => {
   const order = { restaurantLat: 23.35, restaurantLng: 85.33 };
   const now = new Date();
   const candidates = [
-    // Best: closest, highest rating, lowest load.
-    idleRider({ _id: 'A', latitude: 23.351, longitude: 85.331, rating: 5, deliveryTimestamps: [] }),
-    // Worst: farthest, lowest rating, highest load.
-    idleRider({ _id: 'B', latitude: 23.45, longitude: 85.45, rating: 3, deliveryTimestamps: [now, now, now] }),
+    // Best: closest, lowest load.
+    idleRider({ _id: 'A', latitude: 23.351, longitude: 85.331, deliveryTimestamps: [] }),
+    // Worst: farthest, highest load.
+    idleRider({ _id: 'B', latitude: 23.45, longitude: 85.45, deliveryTimestamps: [now, now, now] }),
     // Middle.
-    idleRider({ _id: 'C', latitude: 23.40, longitude: 85.40, rating: 4, deliveryTimestamps: [now] }),
+    idleRider({ _id: 'C', latitude: 23.40, longitude: 85.40, deliveryTimestamps: [now] }),
   ];
 
-  const weights = { etar: 0.5, rating: 0.3, load: 0.2 };
+  const weights = { etar: 0.71, load: 0.29 };
   const result = allocateOrder(order, candidates, weights);
 
   assert.ok(result);
@@ -57,21 +56,22 @@ test('allocateOrder picks the rider with the best composite score', () => {
 
 test('allocateOrder returns falsy for an empty candidate list (no crash)', () => {
   const order = { restaurantLat: 23.35, restaurantLng: 85.33 };
-  const result = allocateOrder(order, [], { etar: 0.5, rating: 0.3, load: 0.2 });
+  const result = allocateOrder(order, [], { etar: 0.71, load: 0.29 });
   assert.ok(!result);
 });
 
-test('weights influence ranking — rating-only weights elect the highest-rated rider regardless of distance', () => {
+test('weights influence ranking — load-only weights elect the least-loaded rider regardless of distance', () => {
   const order = { restaurantLat: 23.35, restaurantLng: 85.33 };
+  const now = new Date();
   const candidates = [
-    // Close but low rating.
-    idleRider({ _id: 'X', latitude: 23.351, longitude: 85.331, rating: 2 }),
-    // Far but highest rating.
-    idleRider({ _id: 'Y', latitude: 23.45, longitude: 85.45, rating: 5 }),
+    // Close but heavily loaded.
+    idleRider({ _id: 'X', latitude: 23.351, longitude: 85.331, deliveryTimestamps: [now, now, now] }),
+    // Far but no recent load.
+    idleRider({ _id: 'Y', latitude: 23.45, longitude: 85.45, deliveryTimestamps: [] }),
   ];
 
-  // etar=0 → distance must not matter; rating dominates.
-  const result = allocateOrder(order, candidates, { etar: 0, rating: 1, load: 0 });
+  // etar=0 → distance must not matter; load dominates.
+  const result = allocateOrder(order, candidates, { etar: 0, load: 1 });
 
   assert.ok(result);
   assert.equal(result.winner._id, 'Y');

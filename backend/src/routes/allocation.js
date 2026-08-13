@@ -139,7 +139,7 @@ router.get('/history', async (req, res, next) => {
         .skip((page - 1) * limit)
         .limit(limit)
         .populate('orderId',  'restaurantName customerName status')
-        .populate('riderId',  'name rating'),
+        .populate('riderId',  'name'),
       AllocationHistory.countDocuments(),
     ]);
 

@@ -39,7 +39,7 @@ export const createRider = async (req, res, next) => {
     const err = validateRiderCreate(req.body);
     if (err) { res.status(400); throw new Error(err); }
 
-    const { name, phone, latitude, longitude, rating } = req.body;
+    const { name, phone, latitude, longitude } = req.body;
     const h3Index = latLngToCell(latitude, longitude, getH3Config().resolution);
 
     const rider = await Rider.create({
@@ -48,7 +48,6 @@ export const createRider = async (req, res, next) => {
       latitude,
       longitude,
       h3Index,
-      rating: rating ?? 4,
       availabilityStatus: 'OFFLINE',
       status: 'IDLE',
       activeOrders: 0,

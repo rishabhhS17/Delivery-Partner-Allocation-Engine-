@@ -16,7 +16,7 @@ export const LOAD_WINDOW_MINUTES    = 60;
 export const MAX_ALLOCATION_RETRIES = 10;
 export const MIN_RIDER_SPEED_MS     = 3;
 
-export const DEFAULT_WEIGHTS = { etar: 0.50, rating: 0.30, load: 0.20 };
+export const DEFAULT_WEIGHTS = { etar: 0.71, load: 0.29 };
 
 export const RANCHI_BOUNDS = {
   minLat: 23.25, maxLat: 23.45,
@@ -78,14 +78,13 @@ export function getWeights() {
   return currentWeights;
 }
 
-export function setWeights({ etar, rating, load }) {
-  const total = etar + rating + load;
+export function setWeights({ etar, load }) {
+  const total = etar + load;
   if (!Number.isFinite(total) || total <= 0) {
     throw new Error('Weights must sum to a positive number — got ' + total);
   }
   currentWeights = {
-    etar:   etar   / total,
-    rating: rating / total,
-    load:   load   / total,
+    etar: etar / total,
+    load: load / total,
   };
 }

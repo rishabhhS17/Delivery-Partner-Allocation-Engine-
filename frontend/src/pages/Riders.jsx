@@ -17,8 +17,8 @@ import { validateLocationForm } from '../utils/formValidation';
 import { getRiders, createRider } from '../api/endpoints';
 import styles from './Riders.module.css';
 
-const EMPTY_FORM = { name: '', phone: '', latitude: '', longitude: '', rating: '' };
-const COLUMNS = 7;
+const EMPTY_FORM = { name: '', phone: '', latitude: '', longitude: '' };
+const COLUMNS = 6;
 
 export default function Riders() {
   const navigate = useNavigate();
@@ -63,7 +63,6 @@ export default function Riders() {
         phone: form.phone || undefined,
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
-        rating: form.rating === '' ? undefined : Number(form.rating),
       });
       setDialogOpen(false);
       setForm(EMPTY_FORM);
@@ -100,7 +99,6 @@ export default function Riders() {
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell>
-              <TableCell>Rating</TableCell>
               <TableCell>Movement</TableCell>
               <TableCell>Current order</TableCell>
               <TableCell align="right">Total orders</TableCell>
@@ -147,7 +145,6 @@ export default function Riders() {
             {status === 'ready' && riders.map((r) => (
               <TableRow key={r._id}>
                 <TableCell>{r.name}</TableCell>
-                <TableCell className={styles.rating}>{r.rating}</TableCell>
                 <TableCell><StatusBadge kind="rider" status={r.status} /></TableCell>
                 <TableCell className={styles.rating}>
                   {r.currentOrderSummary
@@ -175,10 +172,6 @@ export default function Riders() {
           <Box>
             <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} size="small" fullWidth error={!!showError('phone')} />
             {showError('phone') && <Typography className={styles.fieldError}>{errors.phone}</Typography>}
-          </Box>
-          <Box>
-            <TextField label="Rating (optional, 1-5)" value={form.rating} onChange={(e) => setForm({ ...form, rating: e.target.value })} size="small" fullWidth error={!!showError('rating')} />
-            {showError('rating') && <Typography className={styles.fieldError}>{errors.rating}</Typography>}
           </Box>
           <LocationPicker
             latitude={form.latitude}

@@ -62,11 +62,6 @@ const CUSTOMERS = [
   { name: 'Sameer',  latitude: 23.3480, longitude: 85.3380 },
 ];
 
-// ─── rating helper ────────────────────────────────────────────────────────────
-function randRating() {
-  return parseFloat((Math.random() * 1.5 + 3.5).toFixed(1));
-}
-
 // ─── main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('Connecting to MongoDB…');
@@ -96,7 +91,6 @@ async function main() {
   const riderDocs = RIDERS.map(r => ({
     ...r,
     h3Index:            h3(r.latitude, r.longitude),
-    rating:             randRating(),
     availabilityStatus: 'ONLINE',
     status:             'IDLE',
     activeOrders:       0,

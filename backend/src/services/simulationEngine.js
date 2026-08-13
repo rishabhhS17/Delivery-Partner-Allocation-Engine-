@@ -391,7 +391,6 @@ function _buildEntry(rider) {
     h3Index: rider.h3Index ?? latLngToCell(rider.latitude, rider.longitude, getH3Config().resolution),
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
-    rating:  rider.rating,
     deliveryTimestamps: rider.deliveryTimestamps ?? [],
     currentOrderId: null,
 
@@ -508,7 +507,6 @@ function tick() {
       latitude: r.lat,
       longitude: r.lng,
       status: r.status,
-      rating: r.rating,
       deliveryTimestamps: r.deliveryTimestamps,
       currentOrderId: null,
     }));

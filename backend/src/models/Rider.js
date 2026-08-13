@@ -7,7 +7,6 @@ const RiderSchema = new mongoose.Schema(
     latitude:           { type: Number, required: true },
     longitude:          { type: Number, required: true },
     h3Index:            { type: String, required: true },
-    rating:             { type: Number, required: true, default: 4, min: 1, max: 5 },
     availabilityStatus: { type: String, required: true, enum: ['ONLINE', 'OFFLINE'], default: 'OFFLINE' },
     status:             { type: String, required: true, enum: ['IDLE', 'ACCEPTED', 'PICKED_UP'], default: 'IDLE' },
     activeOrders:       { type: Number, required: true, default: 0 },

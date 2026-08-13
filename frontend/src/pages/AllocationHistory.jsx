@@ -3,7 +3,7 @@ import {
   Box, Alert, Button, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material';
-import { History, RefreshCw, Star } from 'lucide-react';
+import { History, RefreshCw } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import { SkeletonRows } from '../components/common/Skeleton';
@@ -51,7 +51,7 @@ export default function AllocationHistory() {
       />
 
       <Alert severity="info" className={styles.alert}>
-        Rider allocation is performed by the deterministic weighted scoring engine (ETAR + Rating + Load).
+        Rider allocation is performed by the deterministic weighted scoring engine (ETAR + Load).
         The winner is always the highest-scoring eligible rider — no randomness, no AI in the decision loop.
       </Alert>
 
@@ -111,7 +111,7 @@ export default function AllocationHistory() {
                 </TableCell>
                 <TableCell className={styles.breakdown}>
                   {a.breakdown
-                    ? `E ${(a.breakdown.etarScore * 100).toFixed(0)} · R ${(a.breakdown.ratingScore * 100).toFixed(0)} · L ${(a.breakdown.loadScore * 100).toFixed(0)}`
+                    ? `E ${(a.breakdown.etarScore * 100).toFixed(0)} · L ${(a.breakdown.loadScore * 100).toFixed(0)}`
                     : '—'}
                 </TableCell>
                 <TableCell>—</TableCell>
@@ -131,18 +131,13 @@ export default function AllocationHistory() {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">{r.riderId?.name ?? '—'}</Typography>
-                  {r.riderId?.rating && (
-                    <Typography variant="body2" className={styles.orderSecondary}>
-                      <Star size={11} className={styles.starIcon} /> {r.riderId.rating}
-                    </Typography>
-                  )}
                 </TableCell>
                 <TableCell className={styles.score}>
                   {(r.allocationScore * 100).toFixed(1)}%
                 </TableCell>
                 <TableCell className={styles.breakdown}>
                   {r.breakdown
-                    ? `E ${(r.breakdown.etarScore * 100).toFixed(0)} · R ${(r.breakdown.ratingScore * 100).toFixed(0)} · L ${(r.breakdown.loadScore * 100).toFixed(0)}`
+                    ? `E ${(r.breakdown.etarScore * 100).toFixed(0)} · L ${(r.breakdown.loadScore * 100).toFixed(0)}`
                     : '—'}
                 </TableCell>
                 <TableCell>{r.candidatesConsidered ?? '—'}</TableCell>

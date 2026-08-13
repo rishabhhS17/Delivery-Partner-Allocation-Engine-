@@ -25,16 +25,9 @@ export function isValidLongitude(value) {
   return Number.isFinite(n) && n >= -180 && n <= 180;
 }
 
-export function isValidRating(rating) {
-  // Rating is optional (server defaults to 4 when omitted).
-  if (rating === undefined || rating === null || rating === '') return true;
-  const n = Number(rating);
-  return Number.isFinite(n) && n >= 1 && n <= 5;
-}
-
 // Returns a { field: message } map of every currently-invalid field in `form`. An empty object
-// means the form is valid. Name and coordinates are required everywhere this is used; phone and
-// rating are optional everywhere this is used, matching the backend validators exactly.
+// means the form is valid. Name and coordinates are required everywhere this is used; phone is
+// optional everywhere this is used, matching the backend validators exactly.
 export function validateLocationForm(form) {
   const errors = {};
 
@@ -42,7 +35,6 @@ export function validateLocationForm(form) {
   if (!isValidPhone(form.phone)) errors.phone = 'Enter a valid phone number';
   if (!isValidLatitude(form.latitude)) errors.latitude = 'Latitude must be between -90 and 90';
   if (!isValidLongitude(form.longitude)) errors.longitude = 'Longitude must be between -180 and 180';
-  if ('rating' in form && !isValidRating(form.rating)) errors.rating = 'Rating must be between 1 and 5';
 
   return errors;
 }

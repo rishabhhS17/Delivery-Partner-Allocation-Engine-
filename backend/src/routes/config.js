@@ -13,24 +13,23 @@ router.get('/weights', (req, res) => {
   res.json(getWeights());
 });
 
-// PUT /api/config/weights  body: { etar, rating, load }
+// PUT /api/config/weights  body: { etar, load }
 // Values are auto-normalized by setWeights() so they don't need to sum to 1.
 router.put('/weights', (req, res) => {
-  const { etar, rating, load } = req.body;
+  const { etar, load } = req.body;
 
   if (
     typeof etar !== 'number' ||
-    typeof rating !== 'number' ||
     typeof load !== 'number' ||
-    etar < 0 || rating < 0 || load < 0 ||
-    etar + rating + load === 0
+    etar < 0 || load < 0 ||
+    etar + load === 0
   ) {
     return res.status(400).json({
-      message: 'etar, rating, and load must be non-negative numbers with a positive sum',
+      message: 'etar and load must be non-negative numbers with a positive sum',
     });
   }
 
-  setWeights({ etar, rating, load });
+  setWeights({ etar, load });
   res.json({ weights: getWeights() });
 });
 

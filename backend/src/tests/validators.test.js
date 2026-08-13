@@ -11,7 +11,7 @@ import {
 // no user-supplied order payload to validate. Rider validators are covered below.
 
 test('validateRiderCreate returns null for valid input', () => {
-  const err = validateRiderCreate({ name: 'Asha', latitude: 23.35, longitude: 85.33, rating: 4 });
+  const err = validateRiderCreate({ name: 'Asha', latitude: 23.35, longitude: 85.33 });
   assert.equal(err, null);
 });
 

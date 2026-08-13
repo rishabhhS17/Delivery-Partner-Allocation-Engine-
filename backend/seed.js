@@ -23,10 +23,6 @@ function randLng() {
   );
 }
 
-function randRating() {
-  return parseFloat((Math.random() * 1.5 + 3.5).toFixed(1));
-}
-
 function h3(lat, lng) {
   return latLngToCell(lat, lng, H3_RESOLUTION);
 }
@@ -122,7 +118,6 @@ async function seedRiders() {
       latitude,
       longitude,
       h3Index:            h3(latitude, longitude),
-      rating:             randRating(),
       availabilityStatus: 'ONLINE',
       status:             'IDLE',
       activeOrders:       0,

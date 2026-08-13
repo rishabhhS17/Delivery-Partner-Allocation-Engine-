@@ -10,9 +10,8 @@ import {
 import styles from './Settings.module.css';
 
 const WEIGHT_FIELDS = [
-  { key: 'etar',   label: 'ETAR',   description: 'Speed of arrival at restaurant' },
-  { key: 'rating', label: 'Rating', description: 'Rider quality score (1–5)' },
-  { key: 'load',   label: 'Load',   description: 'Recent deliveries in past 60 min' },
+  { key: 'etar', label: 'ETAR', description: 'Speed of arrival at restaurant' },
+  { key: 'load', label: 'Load', description: 'Recent deliveries in past 60 min' },
 ];
 
 // Geo + timing knobs. `key` maps to the geoInputs state; `step`/`min` drive the number input.
@@ -28,8 +27,8 @@ const GEO_FIELDS = [
 ];
 
 export default function Settings() {
-  const [weights, setWeights]   = useState({ etar: 0.5, rating: 0.3, load: 0.2 });
-  const [inputs, setInputs]     = useState({ etar: '0.5', rating: '0.3', load: '0.2' });
+  const [weights, setWeights]   = useState({ etar: 0.71, load: 0.29 });
+  const [inputs, setInputs]     = useState({ etar: '0.71', load: '0.29' });
   const [saving, setSaving]     = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
 
@@ -46,9 +45,8 @@ export default function Settings() {
       .then((res) => {
         setWeights(res.data);
         setInputs({
-          etar:   String(res.data.etar),
-          rating: String(res.data.rating),
-          load:   String(res.data.load),
+          etar: String(res.data.etar),
+          load: String(res.data.load),
         });
       })
       .catch(() => {});
@@ -100,11 +98,10 @@ export default function Settings() {
 
   const handleSave = async () => {
     const body = {
-      etar:   parseFloat(inputs.etar)   || 0,
-      rating: parseFloat(inputs.rating) || 0,
-      load:   parseFloat(inputs.load)   || 0,
+      etar: parseFloat(inputs.etar) || 0,
+      load: parseFloat(inputs.load) || 0,
     };
-    if (body.etar + body.rating + body.load === 0) return;
+    if (body.etar + body.load === 0) return;
 
     setSaving(true);
     try {
@@ -112,9 +109,8 @@ export default function Settings() {
       const normalized = res.data.weights;
       setWeights(normalized);
       setInputs({
-        etar:   String(normalized.etar),
-        rating: String(normalized.rating),
-        load:   String(normalized.load),
+        etar: String(normalized.etar),
+        load: String(normalized.load),
       });
       setSaveStatus('saved');
       toast.success('Weights updated');
@@ -134,7 +130,7 @@ export default function Settings() {
 
       <Alert severity="info" className={styles.alert}>
         Weights are auto-normalized to sum to 1 before scoring. Set any positive values and the
-        engine will scale them — e.g. 5 / 3 / 2 is the same as 0.5 / 0.3 / 0.2.
+        engine will scale them — e.g. 7 / 3 is the same as 0.7 / 0.3.
       </Alert>
 
       <Typography variant="h6" className={styles.sectionTitle}>Allocation Weights</Typography>
