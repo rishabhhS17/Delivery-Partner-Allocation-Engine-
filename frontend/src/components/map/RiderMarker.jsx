@@ -7,6 +7,7 @@ const MAX_NAME = 16;
 const STATUS_LABELS = {
   available:  'Available',
   assigned:   'Assigned',
+  waiting:    'Waiting',
   delivering: 'Delivering',
   offline:    'Offline',
 };
@@ -14,6 +15,7 @@ const STATUS_LABELS = {
 function effectiveStatus(rider) {
   if (rider.availabilityStatus === 'OFFLINE') return 'offline';
   if (rider.status === 'PICKED_UP')           return 'delivering';
+  if (rider.status === 'WAITING')             return 'waiting';
   if (rider.status === 'ACCEPTED')            return 'assigned';
   return 'available';
 }
@@ -24,7 +26,7 @@ function shortId(id) {
 
 const RiderMarker = memo(function RiderMarker({ rider, onClick }) {
   const status   = effectiveStatus(rider);
-  const isActive = status === 'assigned' || status === 'delivering';
+  const isActive = status === 'assigned' || status === 'delivering' || status === 'waiting';
   const name     = rider.name ?? 'Rider';
   const display  = name.length > MAX_NAME ? name.slice(0, MAX_NAME) + '…' : name;
 

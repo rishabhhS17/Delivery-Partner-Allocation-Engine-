@@ -101,16 +101,19 @@
 
 .root[data-status='available']  .pin { background: #0070f3; }
 .root[data-status='assigned']   .pin { background: #f59e0b; }
+.root[data-status='waiting']    .pin { background: #8b5cf6; }
 .root[data-status='delivering'] .pin { background: #ea580c; }
 .root[data-status='offline']    .pin { background: #6b7280; opacity: 0.65; }
 
 .root[data-status='available']  .dot { background: #22c55e; }
 .root[data-status='assigned']   .dot { background: #f59e0b; }
+.root[data-status='waiting']    .dot { background: #8b5cf6; }
 .root[data-status='delivering'] .dot { background: #3b82f6; }
 .root[data-status='offline']    .dot { background: #ef4444; }
 
 .root[data-status='available']  .pulseRing { border-color: #0070f3; }
 .root[data-status='assigned']   .pulseRing { border-color: #f59e0b; }
+.root[data-status='waiting']    .pulseRing { border-color: #8b5cf6; }
 .root[data-status='delivering'] .pulseRing { border-color: #ea580c; }
 
 /* ─── Hover ──────────────────────────────── */
@@ -122,6 +125,10 @@
 
 .root[data-status='assigned']:hover .pin {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(245, 158, 11, 0.25);
+}
+
+.root[data-status='waiting']:hover .pin {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(139, 92, 246, 0.25);
 }
 
 .root[data-status='delivering']:hover .pin {

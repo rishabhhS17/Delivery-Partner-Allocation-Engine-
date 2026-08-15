@@ -190,6 +190,7 @@ export default function RiderMap() {
           legend={[
             { label: 'Available',  color: 'link'        },
             { label: 'Assigned',   color: 'warning'     },
+            { label: 'Waiting',    color: 'violet'      },
             { label: 'Delivering', color: 'riderPickup' },
             { label: 'Offline',    color: 'faint'       },
             { label: 'Restaurant', color: 'restaurant'  },

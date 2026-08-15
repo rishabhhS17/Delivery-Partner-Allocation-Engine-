@@ -205,6 +205,7 @@ export default function OrdersMap() {
           eyebrow={eyebrow}
           legend={[
             { label: 'Rider',          color: 'link'       },
+            { label: 'Waiting rider',  color: 'violet'     },
             { label: 'Pending order',  color: 'warning'    },
             { label: 'In transit',     color: 'violet'     },
             { label: 'To restaurant',  color: 'restaurant' },
