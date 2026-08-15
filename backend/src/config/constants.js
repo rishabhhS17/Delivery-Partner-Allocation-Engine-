@@ -18,6 +18,31 @@ export const MIN_RIDER_SPEED_MS     = 3;
 
 export const DEFAULT_WEIGHTS = { etar: 0.71, load: 0.29 };
 
+// ── Multi-order clubbing dispatch engine (feature/multi-order-engine) ──────────
+// Stage 1 — food-prep + just-in-time hold. Prep is a random duration per order;
+// JIT_GRACE is also random per order (drawn once at creation, stored on the order),
+// biased small so a rider arrives slightly early (brief WAITING) rather than late.
+export const PREP_TIME_MIN_S = 300;
+export const PREP_TIME_MAX_S = 900;
+export const JIT_GRACE_MIN_S = 1;
+export const JIT_GRACE_MAX_S = 20;
+
+// Stage 2 — the authority for "in range". H3 is only candidate generation; a rider
+// is a real candidate only if its LIVE haversine distance to the restaurant is within
+// maxRangeKm. Runtime-tunable via PUT /config/h3 (same pattern as candidateK).
+export const MAX_ALLOCATION_RANGE_KM = 5;
+
+// Stage 3 — capped interleaved clubbing (Model A) + anti-starvation.
+export const CLUBBING_CAP                   = 2;    // N-general ceiling; nothing hardcoded to 2
+export const CLUBBING_RESTAURANT_RADIUS_KM  = 1.5;  // B's restaurant near the rider's path
+export const CLUBBING_DROP_RADIUS_KM        = 2;    // B's drop near an existing drop
+export const CLUBBING_BEARING_TOLERANCE_DEG = 45;   // drop-to-drop compatible-direction tolerance
+export const ORDER_DEADLINE_SLACK_S         = 600;  // slack baked into promisedBy
+export const HEAD_FREEZE_S                  = 120;  // within this of next drop → no inserting ahead
+export const FIRST_MILE_NOMINAL_S           = 300;  // rider-independent first-mile est for promisedBy
+export const AGING_LOCK_S                   = 300;  // onboard order this close to promisedBy is immovable;
+                                                    // a PENDING order this close to promisedBy is force-assigned
+
 export const RANCHI_BOUNDS = {
   minLat: 23.25, maxLat: 23.45,
   minLng: 85.25, maxLng: 85.45,
@@ -45,13 +70,14 @@ let currentH3 = {
   resolution:         H3_RESOLUTION,
   candidateK:         H3_CANDIDATE_K,
   restaurantServiceK: RESTAURANT_SERVICE_K,
+  maxRangeKm:         MAX_ALLOCATION_RANGE_KM,
 };
 
 export function getH3Config() {
   return currentH3;
 }
 
-export function setH3Config({ resolution, candidateK, restaurantServiceK } = {}) {
+export function setH3Config({ resolution, candidateK, restaurantServiceK, maxRangeKm } = {}) {
   const next = { ...currentH3 };
   if (resolution !== undefined) {
     if (!Number.isInteger(resolution) || resolution < 0 || resolution > 15)
@@ -67,6 +93,11 @@ export function setH3Config({ resolution, candidateK, restaurantServiceK } = {})
     if (!Number.isInteger(restaurantServiceK) || restaurantServiceK < 0)
       throw new Error('restaurantServiceK must be a non-negative integer');
     next.restaurantServiceK = restaurantServiceK;
+  }
+  if (maxRangeKm !== undefined) {
+    if (typeof maxRangeKm !== 'number' || !Number.isFinite(maxRangeKm) || maxRangeKm <= 0)
+      throw new Error('maxRangeKm must be a positive number');
+    next.maxRangeKm = maxRangeKm;
   }
   currentH3 = next;
 }
