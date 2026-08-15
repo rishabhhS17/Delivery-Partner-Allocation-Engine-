@@ -12,6 +12,20 @@ const OrderSchema = new mongoose.Schema(
     customerLng: { type: Number, required: true },
     assignedRiderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Rider', default: null },
     status: { type: String, required: true, enum: ['PENDING', 'ASSIGNED', 'PICKED_UP', 'DELIVERED', 'CANCELLED'], default: 'PENDING' },
+
+    // ── Multi-order engine (Stage 1 + 3) ──────────────────────────────────────
+    // Prep starts when the order is placed → prepReadyAt = createdAt + prepTime_s.
+    // jitGrace_s is drawn once at creation (random [1,20] s) and reused every tick so
+    // departBy = prepReadyAt − travelTime − jitGrace_s counts down stably. actualWait_s
+    // records how long the rider actually waited at the restaurant (WAITING telemetry).
+    // promisedBy is the absolute per-order deadline, fixed for life:
+    //   createdAt + FIRST_MILE_NOMINAL_S + prepTime_s + lastMile_s + ORDER_DEADLINE_SLACK_S.
+    prepTime_s:   { type: Number },
+    prepReadyAt:  { type: Date },
+    jitGrace_s:   { type: Number },
+    actualWait_s: { type: Number },
+    promisedBy:   { type: Date },
+
     polyline: { type: [{ lat: Number, lng: Number }], default: [] },
     leg1Duration_s: { type: Number },
     leg2Duration_s: { type: Number },
