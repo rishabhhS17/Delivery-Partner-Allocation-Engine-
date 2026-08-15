@@ -3,7 +3,7 @@ import Rider from '../models/Rider.js';
 import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
 import { getCandidateCells, allocateOrder } from '../services/allocationEngine.js';
-import { getWeights, RIDER_SPEED_KMH } from '../config/constants.js';
+import { getWeights, RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import { getRoute } from '../services/routingService.js';
 import { queueNextOrder, syncManualAllocation } from '../services/simulationEngine.js';
@@ -32,7 +32,16 @@ router.post('/allocate', async (req, res, next) => {
 
     // Only score IDLE riders — busy riders can produce a non-finite ETAR and the
     // manual path mirrors the simulation tick, which assigns to IDLE riders only.
-    const idleCandidates = candidates.filter(c => c.status === 'IDLE');
+    // Live-distance range gate (Stage 2): H3 is only candidate generation; haversine on the
+    // rider's live position is the authority for "in range".
+    const { maxRangeKm } = getH3Config();
+    const idleCandidates = candidates.filter(c =>
+      c.status === 'IDLE' &&
+      haversine(
+        { lat: c.latitude, lng: c.longitude },
+        { lat: order.restaurantLat, lng: order.restaurantLng }
+      ) <= maxRangeKm
+    );
 
     const result = allocateOrder(order, idleCandidates, getWeights());
 
@@ -83,7 +92,7 @@ router.post('/allocate', async (req, res, next) => {
         }),
       ]);
 
-      syncManualAllocation(winner._id, order._id);
+      syncManualAllocation(winner._id, order);
 
       getRoute(
         { lat: winner.latitude,     lng: winner.longitude    },
