@@ -3,6 +3,7 @@ import { getH3Config, H3_SERVICE_AREA_K, AUTO_ORDER_INTERVAL_MS } from '../confi
 import Restaurant from '../models/Restaurant.js';
 import Customer from '../models/Customer.js';
 import Order from '../models/Order.js';
+import { buildOrderTimingFields } from '../utils/orderTiming.js';
 
 async function pickPair() {
   const restaurants = await Restaurant.find({ isActive: true });
@@ -40,6 +41,15 @@ export async function createOrder({ customerId, restaurantId } = {}) {
     ({ restaurant, customer } = await pickPair());
   }
 
+  const now = new Date();
+  const timing = buildOrderTimingFields({
+    restaurantLat: restaurant.latitude,
+    restaurantLng: restaurant.longitude,
+    customerLat:   customer.latitude,
+    customerLng:   customer.longitude,
+    now,
+  });
+
   return Order.create({
     restaurantId:   restaurant._id,
     restaurantName: restaurant.name,
@@ -50,7 +60,8 @@ export async function createOrder({ customerId, restaurantId } = {}) {
     customerLat:    customer.latitude,
     customerLng:    customer.longitude,
     status:         'PENDING',
-    queuedAt:       new Date(),
+    queuedAt:       now,
+    ...timing,   // prepTime_s, jitGrace_s, prepReadyAt, promisedBy (Stage 1 + 3)
   });
 }
 
