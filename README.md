@@ -178,6 +178,7 @@ MONGODB_URI=your_mongodb_connection_string   # required
 JWT_SECRET=your_jwt_secret                    # required
 ADMIN_PASSWORD=your_admin_password            # required
 MAPBOX_TOKEN=your_mapbox_token                # required for road-snapped routing
+SESSION_SECRET=your_session_secret            # required when NODE_ENV=production
 PORT=5000                                     # optional (default 5000)
 FRONTEND_URL=http://localhost:5173            # optional — needed in production for CORS
 # Optional: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_CALLBACK_URL (Google login)
@@ -211,7 +212,7 @@ npm run dev        # http://localhost:5173
 
 ## 📡 API Reference
 
-All routes are prefixed with `/api`. Everything except `/auth`, `/analytics`, and `/health` requires a **Bearer JWT**.
+All routes are prefixed with `/api`. Everything except `/auth` and `/health` requires a **Bearer JWT**.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -289,12 +290,37 @@ Delivery-Partner-Allocation-Engine-/
 - [x] Road-distance routing (Mapbox Directions, replacing straight-line)
 - [x] Order TTL cancellation
 - [x] ETAR-based predictive scoring
+- [x] Order clubbing: one rider carries up to 2 orders with interleaved stops
+- [x] Food-prep-aware **just-in-time** dispatch (the rider leaves so they arrive as the food is ready)
 
-**Next — toward production scale**
-- [ ] Stateless services with **Redis-backed shared state** (geo-index, pending queue, atomic assignment locks) for horizontal scaling
-- [ ] **Event-driven dispatch** (decouple order intake from allocation)
-- [ ] True multi-order **batching** (one rider, multiple drops)
-- [ ] **Food-prep time + "just-in-time"** dispatch (rider waits at restaurant until ready)
+**In progress:** five planned builds (foundation, robustness, rider lifecycle, restaurant &
+customer, presenter panel). Every choice behind them is recorded in [DECISIONS_MADE.md](DECISIONS_MADE.md); features held back are in [LATER.md](LATER.md).
+
+**Next Steps: deliberately left for later**
+
+*Scaling*
+- [ ] **Stage B: split into stateless API processes + one dispatcher process, connected by
+  Redis Streams.** The API stays up while the dispatcher restarts, and orders wait in Redis
+  meanwhile. Trigger: build it when the event-loop delay stays above 100 ms (p99) on one
+  process. Until then, one Node process serves one city.
+- [ ] Send only changed riders on the live fleet stream once the fleet passes ~2,000 riders
+- [ ] **Batch matching**: assign many orders against many riders at once instead of one order at a time
+- [ ] Move to **Postgres + PostGIS** (transactions, SQL analytics) if the data model outgrows Mongo
+
+*Access & security*
+- [ ] **Admin-only controls** (everyone else read-only), then a full RBAC approval flow + audit log
+
+*Engine & data*
+- [ ] A **Trip model** that stores the rider's itinerary as its own record
+- [ ] Duration-paced rider movement: a rider covers each leg in Mapbox's real duration instead of at a fixed 40 km/h, so the animation matches what ETAR assumes
+- [ ] Use a rider's **acceptance rate** in scoring
+- [ ] **Delivery OTP** at the door
+
+*Observability & tooling*
+- [ ] A Prometheus `/metrics` endpoint + Grafana dashboards
+- [ ] Convert the backend to **TypeScript**
+
+*Product*
 - [ ] **Demand/surge heatmap** over the H3 grid
 - [ ] Weight-tuning sliders on the live map · candidate comparison (why the winner beat the runner-up)
 
