@@ -10,7 +10,8 @@ export const RECENT_CAP        = 20;
 // Values that get reassigned live on one object, because a module cannot reassign another
 // module's exported variables.
 export const runtime = {
-  tickTimer: null,
+  dispatchTimer:  null,
+  broadcastTimer: null,
   io:        null,
   running:   false,
 };

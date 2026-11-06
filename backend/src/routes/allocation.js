@@ -7,12 +7,12 @@ const router = express.Router();
 // POST /api/allocation/allocate
 // Manually dispatch one PENDING order now, through the engine's normal scoring (idle and busy
 // riders, clubbing), skipping only the just-in-time wait.
-router.post('/allocate', (req, res, next) => {
+router.post('/allocate', async (req, res, next) => {
   try {
     const { orderId } = req.body;
     if (!orderId) return res.status(400).json({ message: 'orderId required' });
 
-    const outcome = dispatchNow(orderId);
+    const outcome = await dispatchNow(orderId);
     if (outcome.status === 'not_pending') {
       return res.status(404).json({ message: 'Order not found or not PENDING' });
     }

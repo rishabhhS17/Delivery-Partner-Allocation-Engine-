@@ -15,6 +15,6 @@ test('addPendingOrder queues the order even before the engine has started', () =
   assert.equal(getStatus().queueDepth, before + 1);
 });
 
-test('dispatchNow reports an order that is not in the queue as not pending', () => {
-  assert.deepEqual(dispatchNow('order-that-was-never-queued'), { status: 'not_pending' });
+test('dispatchNow reports an order that is not in the queue as not pending', async () => {
+  assert.deepEqual(await dispatchNow('order-that-was-never-queued'), { status: 'not_pending' });
 });

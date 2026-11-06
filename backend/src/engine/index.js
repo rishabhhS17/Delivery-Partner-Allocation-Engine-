@@ -4,14 +4,14 @@
 // customers' apps, so they may report what happened, never reach into engine state.
 
 import { latLngToCell } from 'h3-js';
-import { TICK_INTERVAL_MS, getH3Config } from '../config/constants.js';
+import { getH3Config } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, activeRoutes, recentAssignments, runtime } from './state.js';
 import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
-import { _tryAllocate } from './dispatch.js';
+import { _chooseAssignment, _commitAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
-import { tick } from './dispatchTick.js';
+import { runExclusive, startDispatchLoop, startBroadcastLoop } from './dispatchLoop.js';
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -55,12 +55,13 @@ export function initEngine(io) {
   });
 }
 
-/** Load state from the database and start the dispatch tick. */
+/** Load state from the database and start dispatching and broadcasting. */
 export async function startEngine() {
   if (runtime.running) return;
   await hydrate();
-  runtime.running   = true;
-  runtime.tickTimer = setInterval(tick, TICK_INTERVAL_MS);
+  runtime.running = true;
+  startDispatchLoop();
+  startBroadcastLoop();
   if (runtime.io) runtime.io.emit('simulation:status', { running: true });
   console.log('[engine] started');
 }
@@ -92,16 +93,22 @@ export async function placeOrder(request = {}) {
 
 /**
  * Dispatch one queued order right now, skipping the just-in-time wait (manual dispatch).
- * @returns {{ status: 'not_pending' } | { status: 'no_rider', orderId: string }
+ * Waits its turn behind any dispatch round in progress.
+ * @returns {Promise<{ status: 'not_pending' } | { status: 'no_rider', orderId: string }
  *          | { status: 'assigned', orderId: string, riderId: string, riderName: string,
- *              score: number, breakdown: object, candidatesConsidered: number }}
+ *              score: number, breakdown: object, candidatesConsidered: number }>}
  */
 export function dispatchNow(orderId) {
-  const id = orderId.toString();
-  const order = pendingQueue.get(id);
-  if (!order) return { status: 'not_pending' };
-  const assignment = _tryAllocate(id, order, Date.now(), { skipJitHold: true });
-  return assignment ? { status: 'assigned', orderId: id, ...assignment } : { status: 'no_rider', orderId: id };
+  return runExclusive(async () => {
+    const id = orderId.toString();
+    const order = pendingQueue.get(id);
+    if (!order) return { status: 'not_pending' };
+    const decision = _chooseAssignment(id, order, Date.now(), { skipJitHold: true });
+    const assignment = decision ? await _commitAssignment(decision) : null;
+    if (assignment) return { status: 'assigned', orderId: id, ...assignment };
+    // The save may have found the order already changed and dropped it from the queue.
+    return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };
+  });
 }
 
 // ─── Rider reports (what a rider's phone would send) ────────────────────────

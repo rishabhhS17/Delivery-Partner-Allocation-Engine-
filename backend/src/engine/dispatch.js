@@ -1,4 +1,6 @@
-import { getCandidateCells, allocateClub, bearing, bearingDiff } from '../services/allocationEngine.js';
+import {
+  getCandidateCells, allocateClub, bearing, bearingDiff, cheapestInsertion, pickupStop, dropStop,
+} from '../services/allocationEngine.js';
 import {
   getWeights,
   RIDER_SPEED_KMH,
@@ -18,17 +20,22 @@ import { _beginLegToHead } from './riderLifecycle.js';
 
 // Drop orders that waited too long AFTER becoming dispatchable (TTL fix).
 // Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.
-export function _cancelExpiredOrders(now) {
+// The cancellation is saved first and only then announced.
+export async function _cancelExpiredOrders(now) {
   const ttlCutoff = now - getOrderTtl();
-  for (const [orderId, order] of pendingQueue) {
+  for (const [orderId, order] of [...pendingQueue]) {
     const dispatchableMs = order.prepReadyAt
       ? new Date(order.prepReadyAt).getTime()
       : ((order.queuedAt ?? order.createdAt)?.getTime?.() ?? now);
     if (dispatchableMs > ttlCutoff) continue;
 
+    try {
+      await saveCancellation(order._id, now);
+    } catch (err) {
+      console.error('[engine] TTL cancel write failed, will retry:', err.message);
+      continue;
+    }
     pendingQueue.delete(orderId);
-    saveCancellation(order._id, now)
-      .catch(err => console.error('[engine] TTL cancel write failed:', err.message));
     if (runtime.io) runtime.io.emit('order:cancelled', { orderId, reason: 'no_rider' });
     console.warn('[engine] order TTL expired → CANCELLED', orderId);
   }
@@ -60,9 +67,10 @@ function _clubbable(rider, order) {
   return false;
 }
 
-// Returns the assignment it made, or null when the order stays queued (no rider, or JIT hold).
-// skipJitHold assigns now instead of waiting for the departure moment (manual dispatch).
-export function _tryAllocate(orderId, order, now, { skipJitHold = false } = {}) {
+// Picks the rider for one queued order. Pure decision, no writes: returns the chosen rider and
+// score, or null when the order stays queued (no rider, or the just-in-time hold says not yet).
+// skipJitHold chooses now instead of waiting for the departure moment (manual dispatch).
+export function _chooseAssignment(orderId, order, now, { skipJitHold = false } = {}) {
   const promisedByMs = order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
   const force = skipJitHold || (promisedByMs - now) / 1000 <= AGING_LOCK_S; // PENDING anti-starvation backstop
 
@@ -97,8 +105,7 @@ export function _tryAllocate(orderId, order, now, { skipJitHold = false } = {}) 
   const result = allocateClub(order, candidates, getWeights(), now);
   if (!result) return null;
 
-  const winner   = result.winner.rider;
-  const winnerId = winner._id.toString();
+  const winner = result.winner.rider;
 
   // JIT hold — commit only once now ≥ departBy (unless force-assigning near the deadline).
   if (!force) {
@@ -109,39 +116,58 @@ export function _tryAllocate(orderId, order, now, { skipJitHold = false } = {}) 
     if (now < departBy) return null; // hold this tick
   }
 
-  _commitAssignment(order, orderId, winner, winnerId, result, now);
-  return { riderId: winnerId, riderName: winner.name, score: result.score, breakdown: result.breakdown,
-           candidatesConsidered: result.candidatesConsidered };
+  return { orderId, order, winnerId: winner._id.toString(), result };
 }
 
-function _commitAssignment(order, orderId, winner, winnerId, result, now) {
+// Saves the assignment, then applies and announces it. The save is one conditional update on the
+// order (it must still be PENDING), so nothing is broadcast that the database does not hold.
+// Returns the assignment summary, or null when it could not be saved.
+export async function _commitAssignment({ orderId, order, winnerId, result }) {
+  const now = Date.now();
+  let isSaved;
+  try {
+    isSaved = await saveAssignment(order._id, result.winner.rider._id, result.score, now);
+  } catch (err) {
+    console.error('[engine] assignment write failed, order stays queued:', err.message);
+    return null;
+  }
+  if (!isSaved) {
+    // Someone else changed the order (cancelled, or assigned elsewhere) — it is no longer ours.
+    pendingQueue.delete(orderId);
+    console.warn('[engine] order was no longer PENDING at save time, dropped from queue', orderId);
+    return null;
+  }
   pendingQueue.delete(orderId);
+  saveAllocationRecord(order._id, result.winner.rider._id, result)
+    .catch(err => console.error('[engine] allocation history write failed:', err.message));
 
-  winner.orders.set(order._id.toString(), _meta(order));
-  winner.stops = result.ordering;
+  const winner = riderState.get(winnerId);
+
+  // The rider may have moved on (picked up or delivered) while the save was in flight, so plan
+  // the insertion again against their current stops.
+  const insertion = cheapestInsertion(winner.stops, pickupStop(order), dropStop(order),
+    { lat: winner.lat, lng: winner.lng }, now);
+  winner.orders.set(orderId, _meta(order));
+  winner.stops = insertion ? insertion.ordering : [...winner.stops, pickupStop(order), dropStop(order)];
   winner.currentOrderId = winner.stops[0].orderId;
   winner.nextLegCoords = [];        // stale after re-planning → refetch
   _syncIndex(winnerId, winner);     // may remove from index if now at capacity
   _beginLegToHead(winner, now, winnerId);
 
-  Promise.all([
-    saveAssignment(order._id, winner._id, result.score, now),
-    saveAllocationRecord(order._id, winner._id, result),
-  ]).catch(err => console.error('[engine] assign write failed:', err.message));
+  const payload = {
+    orderId,
+    riderId:        winnerId,
+    riderName:      winner.name,
+    restaurantName: order.restaurantName,
+    customerName:   order.customerName,
+    score:          result.score,
+    carrying:       winner.orders.size,
+    ts:             now,
+  };
+  if (runtime.io) runtime.io.emit('order:assigned', payload);
+  recentAssignments.push(payload);
+  if (recentAssignments.length > RECENT_CAP) recentAssignments.shift();
 
-  if (runtime.io) {
-    const payload = {
-      orderId:        order._id.toString(),
-      riderId:        winnerId,
-      riderName:      winner.name,
-      restaurantName: order.restaurantName,
-      customerName:   order.customerName,
-      score:          result.score,
-      carrying:       winner.orders.size,
-      ts:             now,
-    };
-    runtime.io.emit('order:assigned', payload);
-    recentAssignments.push(payload);
-    if (recentAssignments.length > RECENT_CAP) recentAssignments.shift();
-  }
+  return { riderId: winnerId, riderName: winner.name, score: result.score, breakdown: result.breakdown,
+           candidatesConsidered: result.candidatesConsidered };
 }

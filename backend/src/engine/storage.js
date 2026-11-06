@@ -39,13 +39,16 @@ export function requeueOrders(orderIds, now) {
 
 // ─── Order writes ────────────────────────────────────────────────────────────
 
-export function saveAssignment(orderId, riderId, score, now) {
-  return Order.findByIdAndUpdate(orderId, {
-    status: 'ASSIGNED',
-    assignedRiderId: riderId,
-    assignedAt: new Date(now),
-    allocationScore: score,
-  });
+/**
+ * The whole assignment is this one conditional update: it only applies while the order is still
+ * PENDING. Resolves true when it was saved, false when the order had already changed.
+ */
+export async function saveAssignment(orderId, riderId, score, now) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'PENDING' },
+    { $set: { status: 'ASSIGNED', assignedRiderId: riderId, assignedAt: new Date(now), allocationScore: score } }
+  );
+  return modifiedCount === 1;
 }
 
 export function saveAllocationRecord(orderId, riderId, result) {
@@ -68,10 +71,13 @@ export function saveDelivery(orderId, now) {
   return Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now) });
 }
 
-export function saveCancellation(orderId, now) {
-  return Order.findByIdAndUpdate(orderId, {
-    status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null,
-  });
+/** Cancels a PENDING order. Resolves true when it was saved, false when it had already changed. */
+export async function saveCancellation(orderId, now) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'PENDING' },
+    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null } }
+  );
+  return modifiedCount === 1;
 }
 
 export function saveOrderRoute(orderId, route, hasNextLeg) {
