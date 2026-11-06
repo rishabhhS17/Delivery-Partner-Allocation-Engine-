@@ -114,9 +114,21 @@ export default function OrdersMap() {
     [orders],
   );
 
+  // Rider keyed by the order they are heading to right now — used for route lines, which
+  // follow the rider's current leg only.
   const riderByOrder = useMemo(() => {
     const map = new Map();
     for (const r of riders) {
+      if (r.orderId) map.set(r.orderId, r);
+    }
+    return map;
+  }, [riders]);
+
+  // Rider keyed by every order they carry, so each clubbed order shows its rider's name.
+  const riderByOnboardOrder = useMemo(() => {
+    const map = new Map();
+    for (const r of riders) {
+      for (const oid of r.onboardOrderIds ?? []) map.set(oid, r);
       if (r.orderId) map.set(r.orderId, r);
     }
     return map;
@@ -251,7 +263,7 @@ export default function OrdersMap() {
                 <Marker key={`customer-${o._id}`} longitude={o.customerLng} latitude={o.customerLat} anchor="center">
                   <OrderMarker
                     order={o}
-                    riderName={riderByOrder.get(o._id?.toString())?.name}
+                    riderName={riderByOnboardOrder.get(o._id?.toString())?.name}
                   />
                 </Marker>
               ))}

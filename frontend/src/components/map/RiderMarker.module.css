@@ -46,14 +46,6 @@
   gap: 5px;
 }
 
-.rid {
-  font-size: 10px;
-  font-family: monospace;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-
 .dot {
   width: 6px;
   height: 6px;

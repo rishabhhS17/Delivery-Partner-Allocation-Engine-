@@ -20,15 +20,12 @@ function effectiveStatus(rider) {
   return 'available';
 }
 
-function shortId(id) {
-  return (id?.toString() ?? '').slice(-4).toUpperCase() || '—';
-}
-
 const RiderMarker = memo(function RiderMarker({ rider, onClick }) {
   const status   = effectiveStatus(rider);
   const isActive = status === 'assigned' || status === 'delivering' || status === 'waiting';
   const name     = rider.name ?? 'Rider';
   const display  = name.length > MAX_NAME ? name.slice(0, MAX_NAME) + '…' : name;
+  const carrying = rider.carrying ?? rider.onboardOrderIds?.length ?? 0;
 
   const handleClick = useCallback(() => onClick?.(rider), [onClick, rider]);
   const handleKey   = useCallback(
@@ -50,9 +47,9 @@ const RiderMarker = memo(function RiderMarker({ rider, onClick }) {
           {display}
         </span>
         <div className={styles.meta}>
-          <span className={styles.rid}>R-{shortId(rider._id)}</span>
           <span className={styles.dot} />
           <span className={styles.statusText}>{STATUS_LABELS[status]}</span>
+          {carrying > 1 && <span className={styles.statusText}>· {carrying} orders</span>}
         </div>
       </div>
 

@@ -6,13 +6,9 @@ function normalizeStatus(status) {
   return (status ?? 'pending').toLowerCase().replace(/_/g, '');
 }
 
-function shortId(id) {
-  return (id?.toString() ?? '').slice(-6).toUpperCase() || '??????';
-}
-
 const OrderMarker = memo(function OrderMarker({ order, onClick, riderName }) {
   const status         = normalizeStatus(order?.status);
-  const orderId        = `#${shortId(order?._id)}`;
+  const customerName   = order?.customerName ?? 'Customer';
   const restaurantName = order?.restaurantName ?? null;
 
   const handleClick = useCallback(() => onClick?.(order), [onClick, order]);
@@ -33,12 +29,8 @@ const OrderMarker = memo(function OrderMarker({ order, onClick, riderName }) {
     >
       <div className={styles.label}>
         <div className={styles.titleRow}>
-          <span className={styles.orderId}>{orderId}</span>
+          <span className={styles.title}>{customerName}</span>
           <span className={styles.dot} />
-        </div>
-        <div className={styles.infoRow}>
-          <span className={styles.key}>Rider</span>
-          <span className={styles.val}>{riderName ?? 'Unassigned'}</span>
         </div>
         {restaurantName && (
           <div className={styles.infoRow}>
@@ -46,6 +38,10 @@ const OrderMarker = memo(function OrderMarker({ order, onClick, riderName }) {
             <span className={styles.val}>{restaurantName}</span>
           </div>
         )}
+        <div className={styles.infoRow}>
+          <span className={styles.key}>Rider</span>
+          <span className={styles.val}>{riderName ?? 'Finding a rider'}</span>
+        </div>
       </div>
 
       <div className={styles.pin}>

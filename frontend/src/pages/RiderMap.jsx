@@ -9,7 +9,7 @@ import LiveDot from '../components/common/LiveDot';
 import { addLabelPillImage, makeLabelLayer } from '../components/map/mapLabels.js';
 import RiderMarker from '../components/map/RiderMarker.jsx';
 import { useSimulation } from '../context/SimulationContext';
-import { getRestaurants } from '../api/endpoints';
+import { getOrder, getRestaurants } from '../api/endpoints';
 import styles from './RiderMap.module.css';
 
 const MAPBOX_TOKEN  = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
@@ -127,7 +127,18 @@ export default function RiderMap() {
   }, []);
 
   const handleRiderClick = useCallback((rider) => {
-    setPopup({ lng: rider.lng, lat: rider.lat, name: rider.name, status: rider.status, orderId: rider.orderId });
+    const orderIds = rider.onboardOrderIds?.length ? rider.onboardOrderIds : (rider.orderId ? [rider.orderId] : []);
+    setPopup({ riderId: rider._id, lng: rider.lng, lat: rider.lat, name: rider.name, status: rider.status, orders: null });
+    if (!orderIds.length) { setPopup((p) => (p?.riderId === rider._id ? { ...p, orders: [] } : p)); return; }
+
+    // Every order the rider carries (more than one when clubbed), shown by customer name.
+    Promise.all(orderIds.map((id) => getOrder(id).then((r) => r.data?.data).catch(() => null)))
+      .then((list) => {
+        const orders = list.filter(Boolean).map((o) => ({
+          id: o._id, customerName: o.customerName, restaurantName: o.restaurantName,
+        }));
+        setPopup((p) => (p?.riderId === rider._id ? { ...p, orders } : p));
+      });
   }, []);
 
   const riderGeojson = useMemo(() => ({
@@ -258,14 +269,17 @@ export default function RiderMap() {
                     <span className={`${styles.popupBadge} ${styles[`badge${popup.status}`]}`}>
                       {popup.status}
                     </span>
-                    {popup.orderId && (
-                      <div className={styles.popupOrder}>
-                        Order{' '}
-                        <Link to={`/map/orders/${popup.orderId}`} className={styles.popupLink}>
-                          #{popup.orderId.slice(-8).toUpperCase()}
-                        </Link>
-                      </div>
+                    {popup.orders === null && (
+                      <div className={styles.popupOrder}>Loading orders…</div>
                     )}
+                    {popup.orders?.map((o) => (
+                      <div key={o.id} className={styles.popupOrder}>
+                        <Link to={`/map/orders/${o.id}`} className={styles.popupLink}>
+                          {o.customerName ?? 'Customer'}
+                        </Link>
+                        {o.restaurantName && <> · from {o.restaurantName}</>}
+                      </div>
+                    ))}
                   </div>
                 </Popup>
               )}
