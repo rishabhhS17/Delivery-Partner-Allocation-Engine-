@@ -12,6 +12,19 @@ const RiderSchema = new mongoose.Schema(
     // Which orders a rider carries is stored only on the Order (assignedRiderId), never here,
     // so the two can never disagree (decision E2).
     deliveryTimestamps: { type: [Date], default: [] },
+    // The leg the rider is on right now. Position is never saved per tick: it is rebuilt from
+    // this leg and the clock (decision B5). null when idle.
+    currentLeg: {
+      type: {
+        startedAt:     Date,
+        originLat:     Number,
+        originLng:     Number,
+        targetOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+        targetType:    { type: String, enum: ['PICKUP', 'DROP'] },
+        coords:        { type: [[Number]], default: [] },
+      },
+      default: null,
+    },
     isSimulated:        { type: Boolean, required: true, default: false },
   },
   { timestamps: true }

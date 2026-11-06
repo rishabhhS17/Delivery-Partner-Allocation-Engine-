@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken'; // to verify auth tokens
 import app from './app.js'; // your Express app (all the REST routes)
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
-import { initEngine, startEngine } from './engine/index.js';
-import { startBots } from './sim/index.js';
+import { initEngine, startEngine, stopEngine } from './engine/index.js';
+import { startBots, stopBots } from './sim/index.js';
 
 await connectDB();
 
@@ -39,8 +39,21 @@ io.on('connection', (socket) => {
 
 const PORT = config.port;
 
-// Free the port cleanly on nodemon restart so EADDRINUSE never occurs
-const shutdown = () => httpServer.close(() => process.exit(0));
+// Stop the bots and the engine (which saves every rider's final position once), then free the
+// port so a nodemon restart never hits EADDRINUSE. Render sends SIGTERM before a deploy swap.
+let isShuttingDown = false;
+const shutdown = async () => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  stopBots();
+  try {
+    await stopEngine();
+  } catch (err) {
+    console.error('[server] saving final positions failed:', err.message);
+  }
+  httpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref(); // open sockets must not block the exit
+};
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 

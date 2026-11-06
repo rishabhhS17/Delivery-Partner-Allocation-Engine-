@@ -17,3 +17,8 @@ export function startCustomerBot() {
     }
   }, AUTO_ORDER_INTERVAL_MS);
 }
+
+export function stopCustomerBot() {
+  clearInterval(orderTimer);
+  orderTimer = null;
+}

@@ -4,7 +4,8 @@ import { RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
 import { riderState, h3Buckets, pendingQueue, activeRoutes, recentAssignments } from './state.js';
 import { _meta } from './itinerary.js';
 import { _freeSlot, _addToH3 } from './h3Index.js';
-import { _preAdvancePolyline, _positionFromPolyline } from '../utils/polyline.js';
+import { positionAlongLeg } from '../utils/polyline.js';
+import { _beginLegToHead, _fetchHeadRoute } from './riderLifecycle.js';
 import { loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders } from './storage.js';
 
 // ─── Hydration ───────────────────────────────────────────────────────────────
@@ -30,6 +31,8 @@ export async function hydrate() {
   }
 
   const riders = await loadRidersForStartup([...ordersByRider.keys()]);
+  const ridersNeedingNewLeg = [];
+  const ridersNeedingRoute  = [];
   for (const rider of riders) {
     const id    = rider._id.toString();
     const entry = _buildEntry(rider);
@@ -48,11 +51,18 @@ export async function hydrate() {
         if (o.status === 'ASSIGNED') entry.stops.push(pickupStop(o));
         entry.stops.push(dropStop(o));
       }
+      // Keep heading where the rider was heading: moving that stop to the front is always valid
+      // (a pickup may go anywhere before its drop; a drop's food is already on board).
+      const savedTargetIdx = entry.stops.findIndex(stop =>
+        String(stop.orderId) === String(rider.currentLeg?.targetOrderId) && stop.type === rider.currentLeg?.targetType);
+      if (savedTargetIdx > 0) entry.stops.unshift(...entry.stops.splice(savedTargetIdx, 1));
       entry.currentOrderId = entry.stops[0].orderId;
       entry.status = entry.stops[0].type === 'PICKUP' ? 'ACCEPTED' : 'PICKED_UP';
 
-      // Reconstruct the head leg mid-flight (mirrors the two-leg engine's hydrate).
-      _reconstructHeadLeg(entry, ordered[0], now);
+      // Carry on along the saved leg if it still leads to the first stop; otherwise start a new
+      // leg from where the rider was last saved.
+      if (!_restoreLeg(entry, rider.currentLeg, now)) ridersNeedingNewLeg.push([id, entry]);
+      else if (!entry.legCoords.length) ridersNeedingRoute.push([id, entry]);
       entry.h3Index = latLngToCell(entry.lat, entry.lng, getH3Config().resolution);
 
       if (_freeSlot(entry)) _addToH3(id, entry);
@@ -63,6 +73,10 @@ export async function hydrate() {
 
     riderState.set(id, entry);
   }
+
+  // Needs riderState filled first: both look the rider up again when the route arrives.
+  for (const [id, entry] of ridersNeedingNewLeg) _beginLegToHead(entry, now, id);
+  for (const [id, entry] of ridersNeedingRoute) _fetchHeadRoute(entry, id);
 
   // Orders whose rider record is gone go back in the queue.
   const ownerlessOrderIds = [...ordersByRider.values()].flat().map(o => o._id);
@@ -76,41 +90,27 @@ export async function hydrate() {
   console.log(`[engine] hydrated — ${riderState.size} riders, ${pendingQueue.size} pending orders`);
 }
 
-// Reconstruct the rider's current-leg position from the head order's persisted leg data, so a
-// restart resumes a rider mid-leg instead of teleporting them. ASSIGNED → leg1 (→restaurant),
-// PICKED_UP → leg2 (→customer).
-function _reconstructHeadLeg(entry, head, now) {
-  const assigned = head.status === 'ASSIGNED';
-  const originLat  = assigned ? (head.leg1OriginLat ?? entry.lat) : head.restaurantLat;
-  const originLng  = assigned ? (head.leg1OriginLng ?? entry.lng) : head.restaurantLng;
-  const destLat    = assigned ? head.restaurantLat : head.customerLat;
-  const destLng    = assigned ? head.restaurantLng : head.customerLng;
-  const startedAt  = assigned
-    ? (head.legStartedAt ? new Date(head.legStartedAt) : new Date(now))
-    : (head.pickedUpAt   ? new Date(head.pickedUpAt)   : new Date(now));
-  const duration_s = (assigned ? head.leg1Duration_s : head.leg2Duration_s) ?? (assigned ? 60 : 120);
-  const legCoords  = (assigned ? head.leg1Coords : head.leg2Coords);
-  const coords     = legCoords?.length >= 2 ? legCoords : [];
+// Restore the rider's saved leg if it still leads to their first stop, and place them where the
+// clock says they are along it (decision B5). Returns false when there is no usable saved leg.
+function _restoreLeg(entry, savedLeg, now) {
+  const head = entry.stops[0];
+  if (!savedLeg?.startedAt || !head) return false;
+  if (String(savedLeg.targetOrderId) !== String(head.orderId) || savedLeg.targetType !== head.type) return false;
 
-  Object.assign(entry, {
-    legOriginLat: originLat, legOriginLng: originLng,
-    legStartedAt: startedAt, legDuration_s: duration_s,
-    legCoords: coords, nextLegCoords: [],
-    currentSegmentIdx: 0, distanceCoveredOnSegment: 0,
-  });
+  entry.legOriginLat = savedLeg.originLat;
+  entry.legOriginLng = savedLeg.originLng;
+  entry.legStartedAt = new Date(savedLeg.startedAt);
+  entry.legCoords    = savedLeg.coords?.length >= 2 ? savedLeg.coords.map(([lng, lat]) => [lng, lat]) : [];
 
-  if (coords.length >= 2) {
-    const elapsed_s = (now - startedAt.getTime()) / 1000;
-    _preAdvancePolyline(entry, (RIDER_SPEED_KMH / 3.6) * elapsed_s);
-    _positionFromPolyline(entry);
-    // The rider bot resumes from here instead of the start of the route.
-    entry.legStartSegmentIdx        = entry.currentSegmentIdx;
-    entry.legStartDistanceOnSegment = entry.distanceCoveredOnSegment;
-  } else {
-    const t = Math.min(1, (now - startedAt.getTime()) / (duration_s * 1000));
-    entry.lat = originLat + t * (destLat - originLat);
-    entry.lng = originLng + t * (destLng - originLng);
-  }
+  const metresTravelled = (RIDER_SPEED_KMH / 3.6) * (now - entry.legStartedAt.getTime()) / 1000;
+  const position = positionAlongLeg({
+    originLat: entry.legOriginLat, originLng: entry.legOriginLng,
+    targetLat: head.lat, targetLng: head.lng, coords: entry.legCoords,
+  }, metresTravelled);
+  entry.lat = position.lat;
+  entry.lng = position.lng;
+  entry.currentSegmentIdx = position.segmentIdx;
+  return true;
 }
 
 function _buildEntry(rider) {
@@ -119,8 +119,6 @@ function _buildEntry(rider) {
     name:    rider.name,
     lat:     rider.latitude,
     lng:     rider.longitude,
-    homeLat: rider.latitude,
-    homeLng: rider.longitude,
     h3Index: rider.h3Index ?? latLngToCell(rider.latitude, rider.longitude, getH3Config().resolution),
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
@@ -132,16 +130,12 @@ function _buildEntry(rider) {
     currentOrderId: null,        // = stops[0]?.orderId (telemetry / back-compat)
     bucketCell: null,            // the H3 cell this rider is currently indexed under (Stage 2)
 
-    // Current leg (position → stops[0])
+    // Current leg (position → stops[0]); the position itself follows from these and the clock
     legOriginLat: null, legOriginLng: null,
-    legStartedAt: null, legDuration_s: null,
-    legCoords: [],               // polyline for the current leg
-    nextLegCoords: [],           // prefetched polyline for the following leg (swapped in on arrival)
-    currentSegmentIdx: 0,
-    distanceCoveredOnSegment: 0,
-    legKey: 1,                   // changes whenever the leg or its road route is replaced
-    legStartSegmentIdx: 0,       // route progress when the current leg key began
-    legStartDistanceOnSegment: 0,
+    legStartedAt: null,
+    legCoords: [],               // road route for the current leg
+    nextLegCoords: [],           // prefetched road route for the following leg
+    currentSegmentIdx: 0,        // how far along legCoords (the maps trim the drawn route by it)
 
     // WAITING (parked at a not-yet-ready pickup)
     waitingUntil: null,

@@ -11,7 +11,8 @@ import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment, _commitAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
-import { runExclusive, startDispatchLoop, startBroadcastLoop } from './dispatchLoop.js';
+import { runExclusive, startDispatchLoop, startBroadcastLoop, stopLoops } from './dispatchLoop.js';
+import { saveFinalPositions } from './storage.js';
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -25,18 +26,16 @@ import { runExclusive, startDispatchLoop, startBroadcastLoop } from './dispatchL
  */
 
 /**
- * One leg: from where the rider started toward the next stop.
+ * One leg: from where the rider started toward the next stop. The rider's position is a pure
+ * function of this and the clock (see utils/polyline.js positionAlongLeg).
  * @typedef {Object} RiderLeg
- * @property {number} key  Changes whenever the leg (or its road route) is replaced.
  * @property {number} originLat
  * @property {number} originLng
  * @property {number} targetLat
  * @property {number} targetLng
  * @property {number} startedAtMs
- * @property {number} duration_s  Used for straight-line movement when there is no road route.
- * @property {number[][]} coords  Road route as [lng, lat] points; empty until it is fetched.
- * @property {number} startSegmentIdx  Progress along coords when this leg key began.
- * @property {number} startDistanceOnSegment
+ * @property {number[][]} coords  Road route as [lng, lat] points; empty until it is fetched
+ *                                (the rider then moves in a straight line).
  */
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -64,6 +63,18 @@ export async function startEngine() {
   startBroadcastLoop();
   if (runtime.io) runtime.io.emit('simulation:status', { running: true });
   console.log('[engine] started');
+}
+
+/**
+ * Stop dispatching and save every rider's final position once (decision B5). Called on
+ * shutdown (SIGTERM); waits for a dispatch round in progress to finish first.
+ */
+export async function stopEngine() {
+  if (!runtime.running) return;
+  runtime.running = false;
+  stopLoops();
+  await runExclusive(() => saveFinalPositions([...riderState.entries()]));
+  console.log(`[engine] stopped — saved ${riderState.size} rider positions`);
 }
 
 /** @returns {{ running: boolean, riderCount: number, queueDepth: number }} */
@@ -118,7 +129,7 @@ export function getRiderTasks() {
   const tasks = [];
   for (const [riderId, rider] of riderState) {
     const head = rider.stops[0];
-    const hasLeg = head && rider.status !== 'WAITING' && rider.legStartedAt && rider.legDuration_s != null;
+    const hasLeg = head && rider.status !== 'WAITING' && rider.legStartedAt;
     tasks.push({
       riderId,
       status:       rider.status,
@@ -126,16 +137,12 @@ export function getRiderTasks() {
       lng:          rider.lng,
       waitingUntil: rider.status === 'WAITING' ? (rider.waitingUntil ?? 0) : null,
       leg: hasLeg ? {
-        key:                    rider.legKey,
-        originLat:              rider.legOriginLat,
-        originLng:              rider.legOriginLng,
-        targetLat:              head.lat,
-        targetLng:              head.lng,
-        startedAtMs:            rider.legStartedAt.getTime(),
-        duration_s:             rider.legDuration_s,
-        coords:                 rider.legCoords,
-        startSegmentIdx:        rider.legStartSegmentIdx ?? 0,
-        startDistanceOnSegment: rider.legStartDistanceOnSegment ?? 0,
+        originLat:   rider.legOriginLat,
+        originLng:   rider.legOriginLng,
+        targetLat:   head.lat,
+        targetLng:   head.lng,
+        startedAtMs: rider.legStartedAt.getTime(),
+        coords:      rider.legCoords,
       } : null,
     });
   }

@@ -91,8 +91,24 @@ export function saveOrderRoute(orderId, route, hasNextLeg) {
 
 // ─── Rider writes ────────────────────────────────────────────────────────────
 
-/** Rider position and status, shown on the Riders page. On restart the engine recomputes the
- *  status from the orders, so a stale value here does no harm. */
+/** Rider position, status and current leg. On restart the engine recomputes the status from the
+ *  orders and the position from the leg, so a stale value here does no harm. */
 export function saveRiderState(riderId, fields) {
   return Rider.findByIdAndUpdate(riderId, fields);
+}
+
+/** The road route for the rider's current leg arrived. */
+export function saveRiderLegRoute(riderId, coords) {
+  return Rider.updateOne({ _id: riderId, currentLeg: { $ne: null } }, { $set: { 'currentLeg.coords': coords } });
+}
+
+/** One write of every rider's position at shutdown. */
+export function saveFinalPositions(riderEntries) {
+  if (!riderEntries.length) return Promise.resolve();
+  return Rider.bulkWrite(riderEntries.map(([riderId, rider]) => ({
+    updateOne: {
+      filter: { _id: riderId },
+      update: { $set: { latitude: rider.lat, longitude: rider.lng, h3Index: rider.h3Index } },
+    },
+  })));
 }

@@ -19,6 +19,7 @@ export function runExclusive(fn) {
 
 export function startDispatchLoop() {
   const scheduleNextRound = () => {
+    if (!runtime.running) return;
     runtime.dispatchTimer = setTimeout(() => {
       runExclusive(runDispatchRound)
         .catch(err => console.error('[engine] dispatch round failed:', err))
@@ -26,6 +27,13 @@ export function startDispatchLoop() {
     }, TICK_INTERVAL_MS);
   };
   scheduleNextRound();
+}
+
+export function stopLoops() {
+  clearTimeout(runtime.dispatchTimer);
+  clearInterval(runtime.broadcastTimer);
+  runtime.dispatchTimer = null;
+  runtime.broadcastTimer = null;
 }
 
 async function runDispatchRound() {
