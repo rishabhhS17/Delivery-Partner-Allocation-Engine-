@@ -15,7 +15,7 @@ const router = express.Router();
 router.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 router.use('/auth',        authRoutes);
-router.use('/analytics',   analyticsRoutes);
+router.use('/analytics',   protect, analyticsRoutes);
 router.use('/riders',      protect, riderRoutes);
 router.use('/restaurants', protect, restaurantRoutes);
 router.use('/customers',   protect, customerRoutes);

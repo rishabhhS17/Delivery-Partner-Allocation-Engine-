@@ -10,7 +10,15 @@ if (!process.env.MONGODB_URI)    throw new Error('[env] Missing MONGODB_URI — 
 if (!process.env.JWT_SECRET)     throw new Error('[env] Missing JWT_SECRET — server cannot start');
 if (!process.env.ADMIN_PASSWORD) throw new Error('[env] Missing ADMIN_PASSWORD — server cannot start');
 
+const isProd = process.env.NODE_ENV === 'production';
+
+// The dev fallback secret below is public, so production must supply its own.
+if (isProd && !process.env.SESSION_SECRET) {
+  throw new Error('[env] Missing SESSION_SECRET — required in production');
+}
+
 export const config = {
+  isProd,
   port:              process.env.PORT || 5000,
   mongoUri:          process.env.MONGODB_URI,
   jwtSecret:         process.env.JWT_SECRET,

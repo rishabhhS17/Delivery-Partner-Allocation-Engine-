@@ -11,6 +11,10 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 const app = express();
 
+// Render terminates HTTPS at its proxy. Trusting it lets secure cookies be set and makes
+// req.ip the real client (so the rate limiters count per client, not per proxy).
+if (config.isProd) app.set('trust proxy', 1);
+
 const allowedOrigins = [config.frontendUrl, 'http://localhost:3000', 'http://localhost:5173'];
 
 // CSP enabled with explicit directives for API server protection and Mapbox support
@@ -55,7 +59,7 @@ app.use(session({
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 10 * 60 * 1000 }, // 10 min — only for OAuth handshake
+  cookie: { secure: config.isProd, maxAge: 10 * 60 * 1000 }, // 10 min — only for OAuth handshake; HTTPS-only in prod
 }));
 
 app.use(passport.initialize());
