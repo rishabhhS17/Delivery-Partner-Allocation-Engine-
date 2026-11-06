@@ -1,4 +1,4 @@
-import { getCandidateCells, allocateClub, bearing, bearingDiff } from '../allocationEngine.js';
+import { getCandidateCells, allocateClub, bearing, bearingDiff } from '../services/allocationEngine.js';
 import {
   getWeights,
   RIDER_SPEED_KMH,
@@ -8,15 +8,15 @@ import {
   CLUBBING_DROP_RADIUS_KM,
   CLUBBING_BEARING_TOLERANCE_DEG,
   AGING_LOCK_S,
-} from '../../config/constants.js';
-import { haversine } from '../../utils/haversine.js';
-import Rider from '../../models/Rider.js';
-import Order from '../../models/Order.js';
-import AllocationHistory from '../../models/AllocationHistory.js';
+} from '../config/constants.js';
+import { haversine } from '../utils/haversine.js';
+import Rider from '../models/Rider.js';
+import Order from '../models/Order.js';
+import AllocationHistory from '../models/AllocationHistory.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP, runtime } from './state.js';
 import { _meta, _onboardIdsFromStops } from './itinerary.js';
 import { _freeSlot, _syncIndex } from './h3Index.js';
-import { _beginLegToHead } from './riderTrip.js';
+import { _beginLegToHead } from './riderLifecycle.js';
 
 // Drop orders that waited too long AFTER becoming dispatchable (TTL fix).
 // Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.

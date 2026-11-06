@@ -1,6 +1,6 @@
 import Order from '../models/Order.js';
-import { createOrder, bulkCreateOrders } from '../services/orderGenerator.js';
-import { addPendingOrder } from '../services/simulation/index.js';
+import { bulkCreateOrders } from '../services/orderGenerator.js';
+import { addPendingOrder, placeOrder } from '../engine/index.js';
 
 // In-memory idempotency cache — prevents duplicate orders from slow-network retries.
 // Keys expire after 60 s; the Map is pruned on each write (bounded by request rate).
@@ -28,8 +28,7 @@ export const createSingleOrder = async (req, res, next) => {
       throw new Error('Both customerId and restaurantId are required together, or omit both to auto-pick a pair');
     }
 
-    const order = await createOrder({ customerId, restaurantId });
-    addPendingOrder(order);
+    const order = await placeOrder({ customerId, restaurantId });
     res.status(201).json({ success: true, data: order });
   } catch (err) {
     next(err);

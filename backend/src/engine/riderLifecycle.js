@@ -1,9 +1,9 @@
 import { latLngToCell } from 'h3-js';
-import { getRoute } from '../routingService.js';
-import { RIDER_SPEED_KMH, getH3Config } from '../../config/constants.js';
-import { haversine } from '../../utils/haversine.js';
-import Rider from '../../models/Rider.js';
-import Order from '../../models/Order.js';
+import { getRoute } from '../services/routingService.js';
+import { RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
+import { haversine } from '../utils/haversine.js';
+import Rider from '../models/Rider.js';
+import Order from '../models/Order.js';
 import { riderState, activeRoutes, runtime } from './state.js';
 import { _onboardIdsFromStops } from './itinerary.js';
 import { _syncIndex } from './h3Index.js';
@@ -79,6 +79,9 @@ export function _beginLegToHead(rider, now, riderId) {
   rider.nextLegCoords = [];
   rider.currentSegmentIdx = 0;
   rider.distanceCoveredOnSegment = 0;
+  rider.legKey = (rider.legKey ?? 0) + 1;
+  rider.legStartSegmentIdx = 0;
+  rider.legStartDistanceOnSegment = 0;
   rider.currentOrderId = head.orderId;
   rider.status = head.type === 'PICKUP' ? 'ACCEPTED' : 'PICKED_UP';
   rider.waitingUntil = null;
@@ -100,6 +103,7 @@ function _goIdle(rider, now, riderId) {
   rider.legOriginLat = null; rider.legOriginLng = null;
   rider.legCoords = []; rider.nextLegCoords = [];
   rider.currentSegmentIdx = 0; rider.distanceCoveredOnSegment = 0;
+  rider.legKey = (rider.legKey ?? 0) + 1;
   rider.waitingUntil = null; rider.pickupArrivalAt = null;
 
   _syncIndex(riderId, rider); // free slot → (re)index at home
@@ -152,6 +156,9 @@ function _fetchHeadRoute(rider, riderId, now) {
     r.currentSegmentIdx      = 0;
     r.distanceCoveredOnSegment = 0;
     r.legDuration_s          = route.leg1Duration_s;
+    r.legKey                 = (r.legKey ?? 0) + 1;   // tells the rider bot to follow the road route
+    r.legStartSegmentIdx     = 0;
+    r.legStartDistanceOnSegment = 0;
 
     activeRoutes.set(orderIdStr, {
       riderId: riderId.toString(),

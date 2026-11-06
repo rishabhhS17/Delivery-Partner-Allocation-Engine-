@@ -4,7 +4,7 @@ import {
   getStatus,
   addPendingOrder,
   syncManualAllocation,
-} from '../services/simulation/index.js';
+} from '../engine/index.js';
 
 // These tests only touch the in-memory exported helpers. No DB connection is opened
 // (connectDB lives in server.js).

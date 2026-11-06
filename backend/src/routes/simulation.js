@@ -1,5 +1,5 @@
 import express from 'express';
-import { getStatus } from '../services/simulation/index.js';
+import { getStatus } from '../engine/index.js';
 
 const router = express.Router();
 

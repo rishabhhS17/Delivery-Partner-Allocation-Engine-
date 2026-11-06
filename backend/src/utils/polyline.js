@@ -1,5 +1,5 @@
-import { RIDER_SPEED_KMH, TICK_INTERVAL_MS } from '../../config/constants.js';
-import { haversine } from '../../utils/haversine.js';
+import { RIDER_SPEED_KMH, TICK_INTERVAL_MS } from '../config/constants.js';
+import { haversine } from './haversine.js';
 
 // ─── Polyline traversal (unchanged) ─────────────────────────────────────────────
 

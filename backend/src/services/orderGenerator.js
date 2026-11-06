@@ -1,5 +1,5 @@
 import { latLngToCell, gridDisk } from 'h3-js';
-import { getH3Config, H3_SERVICE_AREA_K, AUTO_ORDER_INTERVAL_MS } from '../config/constants.js';
+import { getH3Config, H3_SERVICE_AREA_K } from '../config/constants.js';
 import Restaurant from '../models/Restaurant.js';
 import Customer from '../models/Customer.js';
 import Order from '../models/Order.js';
@@ -77,26 +77,4 @@ export async function bulkCreateOrders(count) {
     }
   }
   return created;
-}
-
-let autoOrderTimer = null;
-let onOrderCreated = null;
-
-export function startAutoOrderJob(onCreate) {
-  if (autoOrderTimer) return;
-  onOrderCreated = onCreate ?? null;
-  autoOrderTimer = setInterval(async () => {
-    try {
-      const order = await createOrder();
-      onOrderCreated?.(order);
-    } catch (err) {
-      console.error('[orderGen] auto order creation failed:', { error: err.message });
-    }
-  }, AUTO_ORDER_INTERVAL_MS);
-}
-
-export function stopAutoOrderJob() {
-  if (!autoOrderTimer) return;
-  clearInterval(autoOrderTimer);
-  autoOrderTimer = null;
 }

@@ -1,4 +1,4 @@
-import { pickupStop, dropStop } from '../allocationEngine.js';
+import { pickupStop, dropStop } from '../services/allocationEngine.js';
 
 // ─── Order / stop helpers ──────────────────────────────────────────────────────
 

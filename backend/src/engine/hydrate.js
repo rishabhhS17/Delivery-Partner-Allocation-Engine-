@@ -1,12 +1,12 @@
 import { latLngToCell } from 'h3-js';
-import { pickupStop, dropStop } from '../allocationEngine.js';
-import { RIDER_SPEED_KMH, getH3Config } from '../../config/constants.js';
-import Rider from '../../models/Rider.js';
-import Order from '../../models/Order.js';
+import { pickupStop, dropStop } from '../services/allocationEngine.js';
+import { RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
+import Rider from '../models/Rider.js';
+import Order from '../models/Order.js';
 import { riderState, h3Buckets, pendingQueue, activeRoutes, recentAssignments, runtime } from './state.js';
 import { _meta } from './itinerary.js';
 import { _freeSlot, _addToH3 } from './h3Index.js';
-import { _preAdvancePolyline, _positionFromPolyline } from './polyline.js';
+import { _preAdvancePolyline, _positionFromPolyline } from '../utils/polyline.js';
 
 const ORPHAN_GRACE_MS = 20_000;
 
@@ -214,6 +214,9 @@ function _reconstructHeadLeg(entry, head, now) {
     const elapsed_s = (now - startedAt.getTime()) / 1000;
     _preAdvancePolyline(entry, (RIDER_SPEED_KMH / 3.6) * elapsed_s);
     _positionFromPolyline(entry);
+    // The rider bot resumes from here instead of the start of the route.
+    entry.legStartSegmentIdx        = entry.currentSegmentIdx;
+    entry.legStartDistanceOnSegment = entry.distanceCoveredOnSegment;
   } else {
     const t = Math.min(1, (now - startedAt.getTime()) / (duration_s * 1000));
     entry.lat = originLat + t * (destLat - originLat);
@@ -247,6 +250,9 @@ function _buildEntry(rider) {
     nextLegCoords: [],           // prefetched polyline for the following leg (swapped in on arrival)
     currentSegmentIdx: 0,
     distanceCoveredOnSegment: 0,
+    legKey: 1,                   // changes whenever the leg or its road route is replaced
+    legStartSegmentIdx: 0,       // route progress when the current leg key began
+    legStartDistanceOnSegment: 0,
 
     // WAITING (parked at a not-yet-ready pickup)
     waitingUntil: null,

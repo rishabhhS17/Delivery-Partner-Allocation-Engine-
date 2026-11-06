@@ -58,8 +58,9 @@ The core is a **deterministic, rule-based allocation engine**: it geo-shortlists
 | `config/constants.js` | H3 resolution, scoring weights, tick timing, order TTL, rider speed, bounds |
 | `models/*.js` | Mongoose schemas — Rider, Restaurant, Customer, Order, AllocationHistory, User |
 | `services/allocationEngine.js` | H3 candidate cells, ETAR computation, normalized weighted scoring |
-| `services/simulationEngine.js` | Tick loop — queue processing, movement, state machine, TTL cancel, WebSocket broadcast, self-healing |
-| `services/orderGenerator.js` | Random + bulk order creation and the auto-order timer |
+| `engine/` | The dispatch engine — live state, dispatch tick, TTL cancel, stop transitions, restart recovery, broadcast. Everything else uses only `engine/index.js` |
+| `sim/` | The bots: rider bots move riders and report arrivals, the customer bot places orders. They may only call the engine's public commands (a test enforces this) |
+| `services/orderGenerator.js` | Random + bulk order creation |
 | `services/routingService.js` | Mapbox Directions calls with a route cache, concurrency limit, and timeout |
 
 ---
@@ -246,7 +247,9 @@ Delivery-Partner-Allocation-Engine-/
 │       ├── middleware/       # auth, error handling
 │       ├── models/          # Mongoose schemas
 │       ├── routes/          # Express route definitions
-│       ├── services/        # allocationEngine, simulationEngine, orderGenerator, routingService
+│       ├── engine/          # dispatch engine (public commands in engine/index.js)
+│       ├── sim/             # rider + customer bots (use only the engine's public commands)
+│       ├── services/        # allocationEngine, orderGenerator, routingService
 │       ├── utils/           # haversine, helpers
 │       ├── validators/      # request validation
 │       ├── tests/           # test suites

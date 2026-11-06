@@ -4,7 +4,8 @@ import jwt from 'jsonwebtoken'; // to verify auth tokens
 import app from './app.js'; // your Express app (all the REST routes)
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
-import { initSimulation, startSimulation } from './services/simulation/index.js';
+import { initEngine, startEngine } from './engine/index.js';
+import { startBots } from './sim/index.js';
 
 await connectDB();
 
@@ -17,7 +18,7 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
 });
 
-initSimulation(io);
+initEngine(io);
 
 // Authenticate every socket connection via JWT in the handshake before it connects.
 io.use((socket, next) => {
@@ -53,5 +54,7 @@ httpServer.on('error', (err) => {
 
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  startSimulation().catch(console.error);
+  startEngine()
+    .then(startBots)
+    .catch(console.error);
 });

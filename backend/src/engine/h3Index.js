@@ -1,4 +1,4 @@
-import { CLUBBING_CAP } from '../../config/constants.js';
+import { CLUBBING_CAP } from '../config/constants.js';
 import { h3Buckets } from './state.js';
 
 // A rider stays discoverable in the H3 index while it has a free slot (Stage 2).
