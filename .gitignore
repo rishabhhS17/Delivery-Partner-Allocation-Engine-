@@ -21,7 +21,10 @@ frontend/UI_IMPLEMENTATION_LOG.md
 /CLAUDE.md
 /DESIGN-vercel.md
 /.claude/
-/.github
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/test.yml
 /tasks/lessons.md
 /tasks/todo.md
 /docs/superpowers/specs/2026-07-09-restaurant-service-radius-design.md

@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # env.js refuses to load without these; the tests never open a DB connection.
+      - run: npm test
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/ci-unused
+          JWT_SECRET: ci-only-secret
+          ADMIN_PASSWORD: ci-only-password
