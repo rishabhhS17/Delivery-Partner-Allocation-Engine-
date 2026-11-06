@@ -1,6 +1,6 @@
 import Order from '../models/Order.js';
 import { createOrder, bulkCreateOrders } from '../services/orderGenerator.js';
-import { addPendingOrder, isSimulationRunning } from '../services/simulation/index.js';
+import { addPendingOrder } from '../services/simulation/index.js';
 
 // In-memory idempotency cache — prevents duplicate orders from slow-network retries.
 // Keys expire after 60 s; the Map is pruned on each write (bounded by request rate).
@@ -20,12 +20,6 @@ export const createSingleOrder = async (req, res, next) => {
   try {
     if (_isDuplicate(req.headers['x-idempotency-key'])) {
       return res.status(409).json({ success: false, message: 'Duplicate request — order already being created' });
-    }
-    if (!isSimulationRunning()) {
-      return res.status(409).json({
-        success: false,
-        message: 'Simulation is currently stopped. Start simulation before creating live orders.',
-      });
     }
 
     const { customerId, restaurantId } = req.body ?? {};

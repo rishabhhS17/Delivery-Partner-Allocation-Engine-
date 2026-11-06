@@ -1,22 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isSimulationRunning,
+  getStatus,
   addPendingOrder,
   syncManualAllocation,
 } from '../services/simulation/index.js';
 
-// These tests only touch the pure/stateless exported helpers. The simulation is
-// never started and no DB connection is opened (connectDB lives in server.js).
+// These tests only touch the in-memory exported helpers. No DB connection is opened
+// (connectDB lives in server.js).
 
-test('isSimulationRunning returns a boolean', () => {
-  assert.equal(typeof isSimulationRunning(), 'boolean');
-});
-
-test('addPendingOrder is a no-op when the simulation is not running', () => {
-  assert.equal(isSimulationRunning(), false);
-  // Must not throw even though the order never enters the (empty) queue.
-  assert.doesNotThrow(() => addPendingOrder({ _id: 'order-not-running' }));
+test('addPendingOrder queues the order even before the engine has started', () => {
+  const before = getStatus().queueDepth;
+  addPendingOrder({ _id: 'order-before-start' });
+  assert.equal(getStatus().queueDepth, before + 1);
 });
 
 test('syncManualAllocation is a safe no-op for an unknown rider', () => {

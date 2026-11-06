@@ -1,8 +1,7 @@
 import { TICK_INTERVAL_MS } from '../../config/constants.js';
-import Rider from '../../models/Rider.js';
-import { startAutoOrderJob, stopAutoOrderJob } from '../orderGenerator.js';
+import { startAutoOrderJob } from '../orderGenerator.js';
 import { riderState, pendingQueue, activeRoutes, recentAssignments, runtime } from './state.js';
-import { _meta, _stopsForMeta, _onboardIdsFromStops } from './itinerary.js';
+import { _meta, _stopsForMeta } from './itinerary.js';
 import { _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderTrip.js';
 import { hydrate, _sweepOrphanedOrders } from './hydrate.js';
@@ -38,46 +37,13 @@ export async function startSimulation() {
   console.log('[sim] started');
 }
 
-export async function stopSimulation() {
-  if (!runtime.running) return;
-  clearInterval(runtime.tickTimer);
-  runtime.tickTimer = null;
-  clearInterval(runtime.healTimer);
-  runtime.healTimer = null;
-  runtime.running   = false;
-  stopAutoOrderJob();
-
-  // Flush current in-memory state to DB so restarts always have a clean baseline.
-  const writes = [];
-  for (const [riderId, rider] of riderState) {
-    writes.push(
-      Rider.findByIdAndUpdate(riderId, {
-        status:          rider.status,
-        currentOrderId:  rider.currentOrderId ?? null,
-        onboardOrderIds: _onboardIdsFromStops(rider),
-        activeOrders:    rider.orders.size,
-        latitude:        rider.lat,
-        longitude:       rider.lng,
-        h3Index:         rider.h3Index,
-        deliveryTimestamps: rider.deliveryTimestamps,
-      }).catch(err => console.error('[sim] flush write failed for', rider.name, ':', err.message))
-    );
-  }
-  await Promise.allSettled(writes);
-  if (runtime.io) runtime.io.emit('simulation:status', { running: false });
-  console.log(`[sim] stopped + flushed ${riderState.size} riders to DB`);
-}
-
 export function getStatus() {
   return { running: runtime.running, riderCount: riderState.size, queueDepth: pendingQueue.size };
 }
 
-export function isSimulationRunning() {
-  return runtime.running;
-}
-
+// Always queue: the simulation runs whenever the server runs. An order that arrives while the
+// engine is still hydrating is either loaded from the DB by hydrate or queued here afterwards.
 export function addPendingOrder(order) {
-  if (!runtime.running) return;
   pendingQueue.set(order._id.toString(), order);
 }
 

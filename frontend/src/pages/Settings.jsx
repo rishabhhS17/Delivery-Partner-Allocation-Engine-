@@ -23,7 +23,7 @@ const GEO_FIELDS = [
   { key: 'restaurantServiceK', label: 'Service-K (restaurant selection)', min: 0, step: 1,
     description: 'Hex-ring radius of restaurants shown to a customer. Applies live.' },
   { key: 'resolution',        label: 'H3 resolution',              min: 0,  step: 1,
-    description: 'Hexagon grid fineness (0–15). Applies after a simulation restart.' },
+    description: 'Hexagon grid fineness (0–15). Applies after a server restart.' },
 ];
 
 export default function Settings() {
@@ -179,8 +179,8 @@ export default function Settings() {
 
       <Alert severity="info" className={styles.alert}>
         TTL and the two K radii apply immediately. Changing the H3 resolution only takes full
-        effect after the simulation is restarted (Stop → Start), since riders are indexed into the
-        grid when the simulation hydrates.
+        effect after the server restarts, since riders are indexed into the grid when the engine
+        loads its state.
       </Alert>
 
       <div className={styles.weightGrid}>

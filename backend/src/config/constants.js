@@ -52,7 +52,7 @@ export const RANCHI_BOUNDS = {
 // Tunable at runtime via /config without a restart. TTL and the two K radii are read at
 // query time, so changes apply immediately. H3 `resolution` is read wherever a cell is
 // computed, but riders are indexed into h3Buckets at hydration time — so a resolution change
-// only fully takes effect after the simulation is restarted (stop → start re-buckets the fleet).
+// only fully takes effect after a server restart (hydrate re-buckets the fleet).
 
 let currentOrderTtlMs = ORDER_TTL_MS;
 

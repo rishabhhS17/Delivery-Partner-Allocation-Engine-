@@ -228,7 +228,7 @@ All routes are prefixed with `/api`. Everything except `/auth` and `/health` req
 | `POST` | `/allocation/allocate` | Manually allocate a PENDING order |
 | `GET` | `/allocation/history` | Paginated allocation audit trail |
 | `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
-| `POST` `GET` | `/simulation/start` · `/simulation/stop` · `/simulation/status` | Control the simulation |
+| `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
 
 ### WebSocket events (server → client)
 `simulation:status` · `simulation:tick` (rider positions + queue depth) · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled` · `recent:assignments`

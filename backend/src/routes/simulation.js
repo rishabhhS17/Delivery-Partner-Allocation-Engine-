@@ -1,26 +1,9 @@
 import express from 'express';
-import { startSimulation, stopSimulation, getStatus } from '../services/simulation/index.js';
+import { getStatus } from '../services/simulation/index.js';
 
 const router = express.Router();
 
-router.post('/start', async (req, res, next) => {
-  try {
-    await startSimulation();
-    res.json({ success: true, status: getStatus() });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/stop', async (req, res, next) => {
-  try {
-    await stopSimulation();
-    res.json({ success: true, status: getStatus() });
-  } catch (err) {
-    next(err);
-  }
-});
-
+// The simulation runs whenever the server runs (decision B1), so there is no start/stop.
 router.get('/status', (req, res) => {
   res.json({ success: true, status: getStatus() });
 });
