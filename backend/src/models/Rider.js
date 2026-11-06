@@ -9,13 +9,8 @@ const RiderSchema = new mongoose.Schema(
     h3Index:            { type: String, required: true },
     availabilityStatus: { type: String, required: true, enum: ['ONLINE', 'OFFLINE'], default: 'OFFLINE' },
     status:             { type: String, required: true, enum: ['IDLE', 'ACCEPTED', 'WAITING', 'PICKED_UP'], default: 'IDLE' },
-    activeOrders:       { type: Number, required: true, default: 0 },
-    currentOrderId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
-    nextOrderId:        { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
-    // Full onboard-order set for N-order clubbing (Stage 3). currentOrderId/nextOrderId are kept
-    // for backward compatibility + the manual path; onboardOrderIds is the authoritative list the
-    // stop-list is rebuilt from on hydrate. Order matters: it is the current itinerary order.
-    onboardOrderIds:    { type: [mongoose.Schema.Types.ObjectId], ref: 'Order', default: [] },
+    // Which orders a rider carries is stored only on the Order (assignedRiderId), never here,
+    // so the two can never disagree (decision E2).
     deliveryTimestamps: { type: [Date], default: [] },
     isSimulated:        { type: Boolean, required: true, default: false },
   },

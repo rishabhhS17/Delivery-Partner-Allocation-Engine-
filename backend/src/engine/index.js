@@ -7,13 +7,11 @@ import { latLngToCell } from 'h3-js';
 import { TICK_INTERVAL_MS, getH3Config } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, activeRoutes, recentAssignments, runtime } from './state.js';
-import { _meta, _stopsForMeta } from './itinerary.js';
-import { _syncIndex, _reindexIfBucketed } from './h3Index.js';
-import { _beginLegToHead, _arriveAtStop, _completePickup } from './riderLifecycle.js';
-import { hydrate, _sweepOrphanedOrders } from './hydrate.js';
+import { _reindexIfBucketed } from './h3Index.js';
+import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
+import { _tryAllocate } from './dispatch.js';
+import { hydrate } from './hydrate.js';
 import { tick } from './dispatchTick.js';
-
-const ORPHAN_SWEEP_INTERVAL_MS = 30_000;
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -63,9 +61,6 @@ export async function startEngine() {
   await hydrate();
   runtime.running   = true;
   runtime.tickTimer = setInterval(tick, TICK_INTERVAL_MS);
-  runtime.healTimer = setInterval(() => {
-    _sweepOrphanedOrders().catch(err => console.error('[engine] orphan sweep failed:', err.message));
-  }, ORPHAN_SWEEP_INTERVAL_MS);
   if (runtime.io) runtime.io.emit('simulation:status', { running: true });
   console.log('[engine] started');
 }
@@ -95,37 +90,18 @@ export async function placeOrder(request = {}) {
   return order;
 }
 
-// Manual admin path: append a second order to a BUSY rider's itinerary (simple append — the tick
-// is the primary, cheapest-insertion clubber; this is a fallback). Only reached if a busy winner
-// is ever passed; the manual route currently scores IDLE riders only.
-export function queueNextOrder(riderId, order) {
-  if (!runtime.running) return;
-  const id = riderId.toString();
-  const rider = riderState.get(id);
-  if (!rider || !order?.restaurantLat) return;
-  const oid = order._id.toString();
-  rider.orders.set(oid, _meta(order));
-  rider.stops = [...rider.stops, ..._stopsForMeta(rider.orders.get(oid))];
-  rider.nextLegCoords = [];
-  rider.currentOrderId = rider.stops[0]?.orderId ?? rider.currentOrderId;
-  pendingQueue.delete(oid);
-  _syncIndex(id, rider);
-}
-
-// Sync in-memory state after a manual IDLE allocation so the next tick doesn't double-assign.
-// Receives the full order doc so the stop-list can be built.
-export function syncManualAllocation(riderId, order) {
-  const id = riderId.toString();
-  const rider = riderState.get(id);
-  if (!rider || !order?.restaurantLat) return; // sim not running, or only an id was passed
-  const oid = order._id.toString();
-  rider.orders.set(oid, _meta(order));
-  rider.stops = _stopsForMeta(rider.orders.get(oid));
-  rider.currentOrderId = order._id;
-  rider.nextLegCoords = [];
-  pendingQueue.delete(oid);
-  _syncIndex(id, rider);
-  _beginLegToHead(rider, Date.now(), id);
+/**
+ * Dispatch one queued order right now, skipping the just-in-time wait (manual dispatch).
+ * @returns {{ status: 'not_pending' } | { status: 'no_rider', orderId: string }
+ *          | { status: 'assigned', orderId: string, riderId: string, riderName: string,
+ *              score: number, breakdown: object, candidatesConsidered: number }}
+ */
+export function dispatchNow(orderId) {
+  const id = orderId.toString();
+  const order = pendingQueue.get(id);
+  if (!order) return { status: 'not_pending' };
+  const assignment = _tryAllocate(id, order, Date.now(), { skipJitHold: true });
+  return assignment ? { status: 'assigned', orderId: id, ...assignment } : { status: 'no_rider', orderId: id };
 }
 
 // ─── Rider reports (what a rider's phone would send) ────────────────────────

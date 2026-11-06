@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getStatus,
   addPendingOrder,
-  syncManualAllocation,
+  dispatchNow,
 } from '../engine/index.js';
 
 // These tests only touch the in-memory exported helpers. No DB connection is opened
@@ -15,6 +15,6 @@ test('addPendingOrder queues the order even before the engine has started', () =
   assert.equal(getStatus().queueDepth, before + 1);
 });
 
-test('syncManualAllocation is a safe no-op for an unknown rider', () => {
-  assert.doesNotThrow(() => syncManualAllocation('nonexistent-rider', 'some-order-id'));
+test('dispatchNow reports an order that is not in the queue as not pending', () => {
+  assert.deepEqual(dispatchNow('order-that-was-never-queued'), { status: 'not_pending' });
 });

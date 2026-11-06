@@ -11,7 +11,6 @@ export const RECENT_CAP        = 20;
 // module's exported variables.
 export const runtime = {
   tickTimer: null,
-  healTimer: null,
   io:        null,
   running:   false,
 };

@@ -2,11 +2,9 @@ import { latLngToCell } from 'h3-js';
 import { getRoute } from '../services/routingService.js';
 import { RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
-import Rider from '../models/Rider.js';
-import Order from '../models/Order.js';
 import { riderState, activeRoutes, runtime } from './state.js';
-import { _onboardIdsFromStops } from './itinerary.js';
 import { _syncIndex } from './h3Index.js';
+import { savePickup, saveDelivery, saveOrderRoute, saveRiderState } from './storage.js';
 
 // ─── Stop arrival / transitions ────────────────────────────────────────────────
 
@@ -22,7 +20,7 @@ export function _arriveAtStop(riderId, rider, now) {
       rider.status          = 'WAITING';
       rider.waitingUntil    = readyMs;
       rider.pickupArrivalAt = now;
-      Rider.findByIdAndUpdate(riderId, { status: 'WAITING' }).catch(() => {});
+      saveRiderState(riderId, { status: 'WAITING' }).catch(() => {});
     } else {
       _completePickup(riderId, rider, now);
     }
@@ -41,9 +39,8 @@ export function _completePickup(riderId, rider, now) {
   rider.waitingUntil    = null;
   rider.pickupArrivalAt = null;
 
-  Order.findByIdAndUpdate(head.orderId, {
-    status: 'PICKED_UP', pickedUpAt: new Date(now), actualWait_s,
-  }).catch(err => console.error('[sim] pickup write failed:', err.message));
+  savePickup(head.orderId, now, actualWait_s)
+    .catch(err => console.error('[engine] pickup write failed:', err.message));
   if (runtime.io) runtime.io.emit('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
 
   _beginLegToHead(rider, now, riderId);
@@ -56,9 +53,8 @@ function _completeDrop(riderId, rider, now) {
   activeRoutes.delete(oid);
   rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
 
-  Order.findByIdAndUpdate(head.orderId, {
-    status: 'DELIVERED', deliveredAt: new Date(now),
-  }).catch(err => console.error('[sim] delivered write failed:', err.message));
+  saveDelivery(head.orderId, now)
+    .catch(err => console.error('[engine] delivered write failed:', err.message));
   if (runtime.io) runtime.io.emit('order:delivered', { orderId: oid, riderId: riderId.toString() });
 
   _syncIndex(riderId, rider);   // a slot just freed → ensure indexed
@@ -108,28 +104,22 @@ function _goIdle(rider, now, riderId) {
 
   _syncIndex(riderId, rider); // free slot → (re)index at home
 
-  Rider.findByIdAndUpdate(riderId, {
+  saveRiderState(riderId, {
     status:          'IDLE',
-    currentOrderId:  null,
-    onboardOrderIds: [],
-    activeOrders:    0,
     latitude:        rider.homeLat,
     longitude:       rider.homeLng,
     h3Index:         rider.h3Index,
     deliveryTimestamps: rider.deliveryTimestamps,
-  }).catch(err => console.error('[sim] idle write failed:', err.message));
+  }).catch(err => console.error('[engine] idle write failed:', err.message));
 }
 
 function _persistRider(riderId, rider, now) {
-  Rider.findByIdAndUpdate(riderId, {
+  saveRiderState(riderId, {
     status:          rider.status,
-    currentOrderId:  rider.currentOrderId ?? null,
-    onboardOrderIds: _onboardIdsFromStops(rider),
-    activeOrders:    rider.orders.size,
     latitude:        rider.lat,
     longitude:       rider.lng,
     h3Index:         rider.h3Index,
-  }).catch(err => console.error('[sim] persist write failed:', err.message));
+  }).catch(err => console.error('[engine] persist write failed:', err.message));
 }
 
 // Fetch the road-snapped route for the current head leg (pos → stops[0]) and prefetch the
@@ -173,11 +163,6 @@ function _fetchHeadRoute(rider, riderId, now) {
         leg2Coords: next ? route.leg2Coords : [],
       });
     }
-    Order.findByIdAndUpdate(head.orderId, {
-      leg1Coords:     route.leg1Coords,
-      leg2Coords:     next ? route.leg2Coords : [],
-      leg1Duration_s: route.leg1Duration_s,
-      leg2Duration_s: route.leg2Duration_s,
-    }).catch(() => {});
-  }).catch(err => console.warn('[sim] head route fetch failed, using lerp fallback:', err.message));
+    saveOrderRoute(head.orderId, route, Boolean(next)).catch(() => {});
+  }).catch(err => console.warn('[engine] head route fetch failed, using lerp fallback:', err.message));
 }

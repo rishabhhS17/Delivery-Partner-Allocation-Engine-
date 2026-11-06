@@ -1,9 +1,10 @@
 import { CLUBBING_CAP } from '../config/constants.js';
 import { h3Buckets } from './state.js';
 
-// A rider stays discoverable in the H3 index while it has a free slot (Stage 2).
+// A rider stays discoverable in the H3 index while it is online and has a free slot (Stage 2).
+// An offline rider may still be finishing orders; they are never offered new ones.
 export function _freeSlot(rider) {
-  return rider.orders.size < CLUBBING_CAP;
+  return rider.availabilityStatus === 'ONLINE' && rider.orders.size < CLUBBING_CAP;
 }
 
 // ─── H3 bucket helpers (Stage 2 — take the rider entry, maintain bucketCell) ────

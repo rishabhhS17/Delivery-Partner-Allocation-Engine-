@@ -120,7 +120,6 @@ async function seedRiders() {
       h3Index:            h3(latitude, longitude),
       availabilityStatus: 'ONLINE',
       status:             'IDLE',
-      activeOrders:       0,
       isSimulated:        true,
     };
   });

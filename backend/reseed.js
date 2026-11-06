@@ -93,7 +93,6 @@ async function main() {
     h3Index:            h3(r.latitude, r.longitude),
     availabilityStatus: 'ONLINE',
     status:             'IDLE',
-    activeOrders:       0,
     isSimulated:        true,
   }));
   await Rider.insertMany(riderDocs);

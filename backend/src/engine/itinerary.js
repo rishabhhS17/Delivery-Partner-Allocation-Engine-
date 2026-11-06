@@ -18,15 +18,3 @@ export function _meta(order) {
 export function _stopsForMeta(meta) {
   return meta.pickedUp ? [dropStop(meta)] : [pickupStop(meta), dropStop(meta)];
 }
-
-// Unique order ids in itinerary order (first appearance in the stop-list) — persisted so hydrate
-// can rebuild an N-order stop-list.
-export function _onboardIdsFromStops(rider) {
-  const seen = new Set();
-  const ids = [];
-  for (const s of rider.stops) {
-    const id = s.orderId.toString();
-    if (!seen.has(id)) { seen.add(id); ids.push(s.orderId); }
-  }
-  return ids;
-}

@@ -10,11 +10,9 @@ import {
   AGING_LOCK_S,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
-import Rider from '../models/Rider.js';
-import Order from '../models/Order.js';
-import AllocationHistory from '../models/AllocationHistory.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP, runtime } from './state.js';
-import { _meta, _onboardIdsFromStops } from './itinerary.js';
+import { _meta } from './itinerary.js';
+import { saveAssignment, saveAllocationRecord, saveCancellation } from './storage.js';
 import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
 
@@ -29,11 +27,10 @@ export function _cancelExpiredOrders(now) {
     if (dispatchableMs > ttlCutoff) continue;
 
     pendingQueue.delete(orderId);
-    Order.findByIdAndUpdate(order._id, {
-      status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null,
-    }).catch(err => console.error('[sim] TTL cancel write failed:', err.message));
+    saveCancellation(order._id, now)
+      .catch(err => console.error('[engine] TTL cancel write failed:', err.message));
     if (runtime.io) runtime.io.emit('order:cancelled', { orderId, reason: 'no_rider' });
-    console.warn('[sim] order TTL expired → CANCELLED', orderId);
+    console.warn('[engine] order TTL expired → CANCELLED', orderId);
   }
 }
 
@@ -63,9 +60,11 @@ function _clubbable(rider, order) {
   return false;
 }
 
-export function _tryAllocate(orderId, order, now) {
+// Returns the assignment it made, or null when the order stays queued (no rider, or JIT hold).
+// skipJitHold assigns now instead of waiting for the departure moment (manual dispatch).
+export function _tryAllocate(orderId, order, now, { skipJitHold = false } = {}) {
   const promisedByMs = order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
-  const force = (promisedByMs - now) / 1000 <= AGING_LOCK_S; // PENDING anti-starvation backstop
+  const force = skipJitHold || (promisedByMs - now) / 1000 <= AGING_LOCK_S; // PENDING anti-starvation backstop
 
   const cells = getCandidateCells(order.restaurantLat, order.restaurantLng);
   const { maxRangeKm } = getH3Config();
@@ -93,10 +92,10 @@ export function _tryAllocate(orderId, order, now) {
       });
     }
   }
-  if (!candidates.length) return;
+  if (!candidates.length) return null;
 
   const result = allocateClub(order, candidates, getWeights(), now);
-  if (!result) return;
+  if (!result) return null;
 
   const winner   = result.winner.rider;
   const winnerId = winner._id.toString();
@@ -107,10 +106,12 @@ export function _tryAllocate(orderId, order, now) {
     const grace_s  = order.jitGrace_s ?? 0;
     const prepReadyMs = order.prepReadyAt ? new Date(order.prepReadyAt).getTime() : now;
     const departBy = prepReadyMs - (travel_s + grace_s) * 1000;
-    if (now < departBy) return; // hold this tick
+    if (now < departBy) return null; // hold this tick
   }
 
   _commitAssignment(order, orderId, winner, winnerId, result, now);
+  return { riderId: winnerId, riderName: winner.name, score: result.score, breakdown: result.breakdown,
+           candidatesConsidered: result.candidatesConsidered };
 }
 
 function _commitAssignment(order, orderId, winner, winnerId, result, now) {
@@ -124,26 +125,9 @@ function _commitAssignment(order, orderId, winner, winnerId, result, now) {
   _beginLegToHead(winner, now, winnerId);
 
   Promise.all([
-    Order.findByIdAndUpdate(order._id, {
-      status: 'ASSIGNED',
-      assignedRiderId: winner._id,
-      assignedAt: new Date(now),
-      allocationScore: result.score,
-    }),
-    Rider.findByIdAndUpdate(winner._id, {
-      status:          winner.status,
-      currentOrderId:  winner.currentOrderId,
-      onboardOrderIds: _onboardIdsFromStops(winner),
-      activeOrders:    winner.orders.size,
-    }),
-    AllocationHistory.create({
-      orderId: order._id,
-      riderId: winner._id,
-      allocationScore: result.score,
-      breakdown: result.breakdown,
-      candidatesConsidered: result.candidatesConsidered,
-    }),
-  ]).catch(err => console.error('[sim] assign write failed:', err.message));
+    saveAssignment(order._id, winner._id, result.score, now),
+    saveAllocationRecord(order._id, winner._id, result),
+  ]).catch(err => console.error('[engine] assign write failed:', err.message));
 
   if (runtime.io) {
     const payload = {

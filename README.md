@@ -124,7 +124,7 @@ PENDING ─▶ ASSIGNED ─▶ PICKED_UP ─▶ DELIVERED
    └─▶ CANCELLED   (waited past ORDER_TTL_MS with no serviceable rider)
 ```
 
-Each **1-second tick**, riders advance along their road-snapped polyline at `RIDER_SPEED_KMH`; leg completions trigger the next transition. Positions are computed **server-side** and streamed to every client — no client-side drift. On restart, the engine **rehydrates in-memory state from MongoDB** and self-heals any orphaned orders/riders.
+Each **1-second tick**, riders advance along their road-snapped polyline at `RIDER_SPEED_KMH`; leg completions trigger the next transition. Positions are computed **server-side** and streamed to every client — no client-side drift. On restart, the engine **rehydrates in-memory state from MongoDB**. Who carries an order is stored only on the order itself, so each rider's itinerary is rebuilt from the orders and there is nothing to heal.
 
 ---
 

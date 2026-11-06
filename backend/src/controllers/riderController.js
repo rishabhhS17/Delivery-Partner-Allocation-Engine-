@@ -1,6 +1,7 @@
 import { latLngToCell } from 'h3-js';
 import { getH3Config } from '../config/constants.js';
 import Rider from '../models/Rider.js';
+import Order from '../models/Order.js';
 import {
   validateRiderCreate,
   validateLocationUpdate,
@@ -8,16 +9,14 @@ import {
 } from '../validators/riderValidator.js';
 
 // Normalize a rider doc for API responses: the DB schema stores latitude/longitude,
-// but all clients (map markers, socket tick) standardize on lat/lng. When `currentOrderId`
-// has been `.populate()`d with restaurant/customer names, also attach a flattened
-// `currentOrderSummary` so clients can render "Restaurant → Customer" without a second lookup;
-// `currentOrderId` itself always stays the raw id.
-const serializeRider = (rider) => {
-  const { latitude, longitude, currentOrderId, ...rest } = rider.toObject();
+// but all clients (map markers, live stream) standardize on lat/lng. `currentOrder` is the
+// rider's earliest-assigned active order (looked up from the orders, which are the only record
+// of who carries what), flattened so clients can render "Restaurant → Customer".
+const serializeRider = (rider, currentOrder = null) => {
+  const { latitude, longitude, ...rest } = rider.toObject();
 
-  const isPopulatedOrder = currentOrderId && typeof currentOrderId === 'object' && 'restaurantName' in currentOrderId;
-  const currentOrderSummary = isPopulatedOrder
-    ? { restaurantName: currentOrderId.restaurantName, customerName: currentOrderId.customerName }
+  const currentOrderSummary = currentOrder
+    ? { restaurantName: currentOrder.restaurantName, customerName: currentOrder.customerName }
     : null;
 
   const deliveryTimestamps = rest.deliveryTimestamps ?? [];
@@ -27,7 +26,7 @@ const serializeRider = (rider) => {
     ...rest,
     lat: latitude,
     lng: longitude,
-    currentOrderId: isPopulatedOrder ? currentOrderId._id : currentOrderId,
+    currentOrderId: currentOrder?._id ?? null,
     currentOrderSummary,
     totalOrders: deliveryTimestamps.length,
     ordersLastHour: deliveryTimestamps.filter((t) => new Date(t).getTime() > oneHourAgo).length,
@@ -50,7 +49,6 @@ export const createRider = async (req, res, next) => {
       h3Index,
       availabilityStatus: 'OFFLINE',
       status: 'IDLE',
-      activeOrders: 0,
       isSimulated: false,
     });
 
@@ -60,12 +58,27 @@ export const createRider = async (req, res, next) => {
   }
 };
 
-const CURRENT_ORDER_POPULATE = { path: 'currentOrderId', select: 'restaurantName customerName' };
+// riderId → that rider's earliest-assigned active order.
+async function findCurrentOrdersByRider(riderFilter = {}) {
+  const activeOrders = await Order.find({ status: { $in: ['ASSIGNED', 'PICKED_UP'] }, ...riderFilter })
+    .sort({ assignedAt: 1 })
+    .select('_id assignedRiderId restaurantName customerName')
+    .lean();
+  const byRider = new Map();
+  for (const order of activeOrders) {
+    const riderId = order.assignedRiderId?.toString();
+    if (riderId && !byRider.has(riderId)) byRider.set(riderId, order);
+  }
+  return byRider;
+}
 
 export const getAllRiders = async (req, res, next) => {
   try {
-    const riders = await Rider.find().sort({ createdAt: -1 }).populate(CURRENT_ORDER_POPULATE);
-    res.json({ success: true, data: riders.map(serializeRider) });
+    const [riders, currentOrders] = await Promise.all([
+      Rider.find().sort({ createdAt: -1 }),
+      findCurrentOrdersByRider(),
+    ]);
+    res.json({ success: true, data: riders.map((r) => serializeRider(r, currentOrders.get(r._id.toString()))) });
   } catch (err) {
     next(err);
   }
@@ -73,9 +86,10 @@ export const getAllRiders = async (req, res, next) => {
 
 export const getRiderById = async (req, res, next) => {
   try {
-    const rider = await Rider.findById(req.params.id).populate(CURRENT_ORDER_POPULATE);
+    const rider = await Rider.findById(req.params.id);
     if (!rider) { res.status(404); throw new Error('Rider not found'); }
-    res.json({ success: true, data: serializeRider(rider) });
+    const currentOrders = await findCurrentOrdersByRider({ assignedRiderId: rider._id });
+    res.json({ success: true, data: serializeRider(rider, currentOrders.get(rider._id.toString())) });
   } catch (err) {
     next(err);
   }
