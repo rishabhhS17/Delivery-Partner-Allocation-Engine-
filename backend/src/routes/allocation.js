@@ -6,7 +6,7 @@ import { getCandidateCells, allocateOrder } from '../services/allocationEngine.j
 import { getWeights, RIDER_SPEED_KMH, getH3Config } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import { getRoute } from '../services/routingService.js';
-import { queueNextOrder, syncManualAllocation } from '../services/simulationEngine.js';
+import { queueNextOrder, syncManualAllocation } from '../services/simulation/index.js';
 
 const router = express.Router();
 

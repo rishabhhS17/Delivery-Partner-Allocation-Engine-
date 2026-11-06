@@ -1,6 +1,6 @@
 import Order from '../models/Order.js';
 import { createOrder, bulkCreateOrders } from '../services/orderGenerator.js';
-import { addPendingOrder, isSimulationRunning } from '../services/simulationEngine.js';
+import { addPendingOrder, isSimulationRunning } from '../services/simulation/index.js';
 
 // In-memory idempotency cache — prevents duplicate orders from slow-network retries.
 // Keys expire after 60 s; the Map is pruned on each write (bounded by request rate).

@@ -4,7 +4,7 @@ import {
   isSimulationRunning,
   addPendingOrder,
   syncManualAllocation,
-} from '../services/simulationEngine.js';
+} from '../services/simulation/index.js';
 
 // These tests only touch the pure/stateless exported helpers. The simulation is
 // never started and no DB connection is opened (connectDB lives in server.js).

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'; // to verify auth tokens
 import app from './app.js'; // your Express app (all the REST routes)
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
-import { initSimulation, startSimulation } from './services/simulationEngine.js';
+import { initSimulation, startSimulation } from './services/simulation/index.js';
 
 await connectDB();
 

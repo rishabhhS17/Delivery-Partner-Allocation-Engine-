@@ -1,5 +1,5 @@
 import express from 'express';
-import { startSimulation, stopSimulation, getStatus } from '../services/simulationEngine.js';
+import { startSimulation, stopSimulation, getStatus } from '../services/simulation/index.js';
 
 const router = express.Router();
 

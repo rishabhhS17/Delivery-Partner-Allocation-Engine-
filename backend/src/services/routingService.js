@@ -9,7 +9,7 @@ const _queue = [];
 // Route cache — reuses a recently-computed route instead of hitting the Mapbox Directions API
 // again for the same (or a very close) rider/restaurant/customer coordinate triple. Restaurants
 // and customers are static, so their contribution to the cache key is exact; rider coordinates
-// are rounded to a ~111m grid, which is acceptable because simulationEngine.js already treats a
+// are rounded to a ~111m grid, which is acceptable because simulation/riderTrip.js already treats a
 // fetched route as an enhancement over a straight-line lerp fallback — a slightly-off cached
 // origin is no worse than that existing gap, and it self-corrects at the rider's next
 // assignment. Keys expire after ROUTE_CACHE_TTL_MS; pruned opportunistically on each write,
