@@ -26,6 +26,7 @@ export function buildLiveSnapshot() {
     running:           runtime.running,
     riders:            buildFleetSnapshot(),
     queueDepth:        pendingQueue.size,
+    dispatchPaused:    runtime.isDispatchPaused,
     routes:            [...activeRoutes].map(([orderId, route]) => ({ orderId, ...route })),
     recentAssignments: [...recentAssignments],
   };
@@ -44,6 +45,7 @@ export function buildFleetSnapshot() {
       orderId:            rider.currentOrderId ? rider.currentOrderId.toString() : null,
       carrying:           rider.orders.size,
       onboardOrderIds:    [...rider.orders.keys()],
+      hasOffer:           Boolean(rider.openOffer),
       legStepIndex:       rider.currentSegmentIdx ?? 0,
       leg:                rider.status === 'ACCEPTED' ? 'leg1'
                         : rider.status === 'PICKED_UP' ? 'leg2'

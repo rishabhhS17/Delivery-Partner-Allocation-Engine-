@@ -39,6 +39,7 @@ export function SimulationProvider({ children }) {
   const [showDisconnectedBanner, setShowDisconnectedBanner] = useState(false);
   const [riders, setRiders]           = useState([]);
   const [queueDepth, setQueueDepth]   = useState(0);
+  const [dispatchPaused, setDispatchPaused] = useState(false);
   const [allocations, setAllocations] = useState([]);
   const [routes, setRoutes]           = useState(new Map());
 
@@ -77,12 +78,14 @@ export function SimulationProvider({ children }) {
           setShowDisconnectedBanner(false);
           setRiders(data.riders ?? []);
           setQueueDepth(data.queueDepth ?? 0);
+          setDispatchPaused(Boolean(data.dispatchPaused));
           setRoutes(new Map((data.routes ?? []).map(({ orderId, ...route }) => [orderId, route])));
           setAllocations([...(data.recentAssignments ?? [])].reverse().map((a) => ({ ...a, ts: a.ts ?? Date.now() })));
           break;
         case 'simulation:tick':
           setRiders(data.riders ?? []);
           setQueueDepth(data.queueDepth ?? 0);
+          setDispatchPaused(Boolean(data.dispatchPaused));
           break;
         case 'order:assigned':
           setAllocations((prev) => [{ ...data, ts: data.ts ?? Date.now() }, ...prev].slice(0, 100));
@@ -151,7 +154,7 @@ export function SimulationProvider({ children }) {
 
   return (
     <SimulationContext.Provider
-      value={{ connected, showDisconnectedBanner, riders, queueDepth, allocations, routes }}
+      value={{ connected, showDisconnectedBanner, riders, queueDepth, dispatchPaused, allocations, routes }}
     >
       {children}
     </SimulationContext.Provider>

@@ -127,7 +127,9 @@ async function runDispatchRound() {
 export function startBroadcastLoop() {
   runtime.broadcastTimer = setInterval(() => {
     const startedAt = performance.now();
-    publish('simulation:tick', { riders: buildFleetSnapshot(), queueDepth: pendingQueue.size });
+    publish('simulation:tick', {
+      riders: buildFleetSnapshot(), queueDepth: pendingQueue.size, dispatchPaused: runtime.isDispatchPaused,
+    });
     recordBroadcastMs(performance.now() - startedAt);
   }, TICK_INTERVAL_MS);
 }

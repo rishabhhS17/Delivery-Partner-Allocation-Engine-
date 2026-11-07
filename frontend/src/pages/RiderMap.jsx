@@ -1,13 +1,15 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import { Presentation } from 'lucide-react';
 import Map, { Source, Layer, Popup, Marker } from 'react-map-gl';
 import PageHeader from '../components/common/PageHeader';
 import MapPanel from '../components/common/MapPanel';
 import LiveDot from '../components/common/LiveDot';
 import { addLabelPillImage, makeLabelLayer } from '../components/map/mapLabels.js';
 import RiderMarker from '../components/map/RiderMarker.jsx';
+import PresenterDrawer from '../components/map/PresenterDrawer.jsx';
 import { useSimulation } from '../context/SimulationContext';
 import { getOrder, getRestaurants } from '../api/endpoints';
 import styles from './RiderMap.module.css';
@@ -65,6 +67,7 @@ export default function RiderMap() {
   const [restaurants, setRestaurants]     = useState([]);
   const [popup, setPopup]                 = useState(null);
   const [unclusteredIds, setUnclusteredIds] = useState(new Set());
+  const [isPresenterOpen, setIsPresenterOpen] = useState(false);
 
   const mapRef          = useRef(null);
   const mapContainerRef = useRef(null);
@@ -193,7 +196,14 @@ export default function RiderMap() {
       <PageHeader
         title="Rider Map"
         description="Live positions of every rider, color-coded by movement state."
+        action={
+          <Button size="small" variant="outlined" startIcon={<Presentation size={14} />}
+            onClick={() => setIsPresenterOpen((isOpen) => !isOpen)}>
+            Presenter
+          </Button>
+        }
       />
+      <PresenterDrawer isOpen={isPresenterOpen} onClose={() => setIsPresenterOpen(false)} />
 
       <div className={styles.mapPanelWrap}>
         <MapPanel
