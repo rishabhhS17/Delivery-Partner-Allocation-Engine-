@@ -181,6 +181,7 @@ ADMIN_PASSWORD=your_admin_password            # required
 MAPBOX_TOKEN=your_mapbox_token                # required for road-snapped routing
 MAPBOX_DAILY_BUDGET=3000                      # optional — Mapbox calls per UTC day before straight-line fallback
 ORDER_SERVICE_KEY=your_service_key            # optional — enables POST /api/intake/orders for an upstream order service
+SIMULATION_ENABLED=true                       # optional — enables the presenter panel's simulated database outage
 SESSION_SECRET=your_session_secret            # required when NODE_ENV=production
 PORT=5000                                     # optional (default 5000)
 FRONTEND_URL=http://localhost:5173            # optional — needed in production for CORS
@@ -232,6 +233,7 @@ All routes are prefixed with `/api`. Everything except `/auth`, `/health` and `/
 | `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
 | `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
 | `GET` | `/stream` | Live feed (Server-Sent Events): a snapshot, then the fleet every second and each order event |
+| `GET` `POST` | `/presenter` · `/presenter/riders/:action` · `/presenter/kitchens/:action` · `/presenter/database-outage` | Presenter panel: force the next edge case (rider reject / ignore / cancel, restaurant reject / delay / early, 60 s DB outage when `SIMULATION_ENABLED=true`) |
 | `POST` | `/intake/orders` | Upstream order service intake (`X-Service-Key` header, no login). Same `externalOrderId` → the existing order is returned, never a duplicate |
 
 ### Live stream events (`GET /api/stream`, server → client)

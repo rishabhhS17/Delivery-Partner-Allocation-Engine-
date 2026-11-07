@@ -50,5 +50,11 @@ export const setBotBehaviour = (body) => api.put('/config/bots', body);
 // Analytics
 export const getAnalytics = (opts = {}) => api.get('/analytics', opts);
 
+// Presenter panel (force the next edge case)
+export const getPresenterState     = ()       => api.get('/presenter');
+export const forceRiderAction      = (action) => api.post(`/presenter/riders/${action}`);
+export const forceKitchenAction    = (action) => api.post(`/presenter/kitchens/${action}`);
+export const startDatabaseOutage   = ()       => api.post('/presenter/database-outage');
+
 // Engine health (event-loop delay, tick times, queues, DB latency)
 export const getHealth = () => api.get('/health');

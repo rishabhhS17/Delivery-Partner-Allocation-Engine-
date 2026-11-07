@@ -11,6 +11,19 @@ import { getKitchenTickets, updatePrepEstimate, restaurantRejectedOrder } from '
 const MINUTE_MS = 60_000;
 
 const plansByOrder = new Map(); // orderId → { action, actAt, foodReadyAt, isDone }
+
+// Presenter buttons (decision I3): the newest order still being prepared is rejected, delayed or
+// finished early — at once, rather than halfway through its estimate.
+const forcedKitchenActions = [];  // 'reject' | 'delay' | 'early', oldest first
+
+export function forceNextKitchenAction(action) {
+  forcedKitchenActions.push(action);
+}
+
+export function getForcedKitchenActions() {
+  return [...forcedKitchenActions];
+}
+
 let kitchenTimer = null;
 let startedAt = null;
 
@@ -28,7 +41,9 @@ export function stopKitchenBot() {
 function runKitchens() {
   const now = Date.now();
   const liveOrderIds = new Set();
-  for (const ticket of getKitchenTickets()) {
+  const tickets = getKitchenTickets();
+  applyForcedAction(tickets, now);
+  for (const ticket of tickets) {
     liveOrderIds.add(ticket.orderId);
     let plan = plansByOrder.get(ticket.orderId);
     if (!plan) {
@@ -44,6 +59,22 @@ function runKitchens() {
     act.then((result) => { if (result === 'failed') plan.isDone = false; });
   }
   for (const orderId of plansByOrder.keys()) if (!liveOrderIds.has(orderId)) plansByOrder.delete(orderId);
+}
+
+function applyForcedAction(tickets, now) {
+  if (!forcedKitchenActions.length) return;
+  const newestOpen = tickets
+    .filter(ticket => !plansByOrder.get(ticket.orderId)?.isDone || plansByOrder.get(ticket.orderId)?.action === 'on_time')
+    .sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt))[0];
+  if (!newestOpen) return; // wait for an order
+  const action = forcedKitchenActions.shift();
+  const behaviour = getKitchenBotBehaviour();
+  const readyAtMs = new Date(newestOpen.foodReadyAt).getTime();
+  const between = (min, max) => min + Math.random() * (max - min);
+  const foodReadyAt = action === 'delay'
+    ? readyAtMs + between(behaviour.delayMinMinutes, behaviour.delayMaxMinutes) * MINUTE_MS
+    : readyAtMs - between(behaviour.earlyMinMinutes, behaviour.earlyMaxMinutes) * MINUTE_MS;
+  plansByOrder.set(newestOpen.orderId, { action, actAt: now, foodReadyAt, isDone: false });
 }
 
 function planOrder(ticket) {

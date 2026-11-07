@@ -29,6 +29,23 @@ let lastTickMs = null;
 const offerReplies = new Map();      // `${riderId}:${orderId}` → { answer, answerAt, isSent }
 const pickupPlans  = new Map();      // `${riderId}:${orderId}` → { cancelAt: ms | null, isSent }
 
+// Presenter buttons (decision I3): the next offer any bot sees is rejected / ignored, or the next
+// rider found heading to a pickup cancels it — at once, so the audience sees it happen.
+const forcedRiderActions = [];       // 'reject' | 'ignore' | 'cancel', oldest first
+
+export function forceNextRiderAction(action) {
+  forcedRiderActions.push(action);
+}
+
+export function getForcedRiderActions() {
+  return [...forcedRiderActions];
+}
+
+function takeForcedAction(kinds) {
+  const index = forcedRiderActions.findIndex(action => kinds.includes(action));
+  return index === -1 ? null : forcedRiderActions.splice(index, 1)[0];
+}
+
 /** How long the last rider-bot tick took, in ms (shown on /api/health). */
 export function getRiderBotTickMs() {
   return lastTickMs;
@@ -78,10 +95,11 @@ function answerOffer(riderId, orderId, now) {
   if (!reply) {
     const behaviour = getRiderBotBehaviour();
     const roll = Math.random() * 100;
-    const answer = roll < behaviour.rejectPercent ? 'reject'
+    const forced = takeForcedAction(['reject', 'ignore']);
+    const answer = forced ?? (roll < behaviour.rejectPercent ? 'reject'
       : roll < behaviour.rejectPercent + behaviour.ignorePercent ? 'ignore'
-      : 'accept';
-    const replyAfterS = behaviour.replyMinS + Math.random() * (behaviour.replyMaxS - behaviour.replyMinS);
+      : 'accept');
+    const replyAfterS = forced ? 1 : behaviour.replyMinS + Math.random() * (behaviour.replyMaxS - behaviour.replyMinS);
     reply = { answer, answerAt: now + replyAfterS * 1000, isSent: false };
     offerReplies.set(key, reply);
   }
@@ -103,6 +121,7 @@ function maybeCancelBeforePickup(riderId, orderId, now) {
     plan = { cancelAt: willCancel ? now + (3 + Math.random() * 15) * 1000 : null, isSent: false };
     pickupPlans.set(key, plan);
   }
+  if (!plan.cancelAt && !plan.isSent && takeForcedAction(['cancel'])) plan.cancelAt = now;
   if (plan.cancelAt && !plan.isSent && now >= plan.cancelAt) {
     plan.isSent = true;
     riderCancelledOrder(riderId, orderId).then((result) => { if (result === 'failed') plan.isSent = false; });

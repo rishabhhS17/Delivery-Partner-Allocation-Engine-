@@ -31,6 +31,8 @@ export const config = {
   // Shared key the upstream order service sends as X-Service-Key on POST /api/intake/orders
   // (decision H2). Unset → order intake is switched off.
   orderServiceKey:   process.env.ORDER_SERVICE_KEY  || '',
+  // Test hooks for the presenter panel (the simulated database outage). Off unless set to 'true'.
+  isSimulationTestHooksEnabled: process.env.SIMULATION_ENABLED === 'true',
   frontendUrl:       process.env.FRONTEND_URL        || 'http://localhost:3000',
   googleClientId:    process.env.GOOGLE_CLIENT_ID    || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',

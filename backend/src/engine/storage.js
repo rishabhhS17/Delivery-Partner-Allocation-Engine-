@@ -23,15 +23,38 @@ const ACTIVE_ORDER_STATUSES = ['ASSIGNED', 'PICKED_UP'];
 // cleared when it is delivered or cancelled to keep the database small under load (decision K3).
 const CLEARED_ROUTE_FIELDS = { leg1Coords: [], leg2Coords: [], polyline: [] };
 
+// ─── Simulated outage (presenter test hook) ──────────────────────────────────
+// While set, every call below fails as if the database were unreachable, so the presenter can
+// show dispatch pausing and resuming (decision I3). Only reachable when SIMULATION_ENABLED=true.
+let simulatedOutageUntil = 0;
+
+export function simulateDatabaseOutage(durationMs) {
+  simulatedOutageUntil = Date.now() + durationMs;
+  return simulatedOutageUntil;
+}
+
+export function getSimulatedOutageUntil() {
+  return simulatedOutageUntil > Date.now() ? simulatedOutageUntil : null;
+}
+
+function isSimulatedOutage() {
+  return simulatedOutageUntil > Date.now();
+}
+
+function simulatedOutageError() {
+  return Promise.reject(new Error('database unreachable (simulated outage)'));
+}
+
 /** True while the database connection is up. The engine makes no decision it cannot save. */
 export function isDatabaseAvailable() {
-  return mongoose.connection.readyState === 1;
+  return mongoose.connection.readyState === 1 && !isSimulatedOutage();
 }
 
 const PING_TIMEOUT_MS = 2000;
 
 /** Round-trip time of a database ping in ms, or null if it failed or took over 2 s. */
 export async function pingDatabase() {
+  if (isSimulatedOutage()) return null;
   const startedAt = performance.now();
   try {
     await Promise.race([
@@ -48,25 +71,30 @@ export async function pingDatabase() {
 
 /** Orders a rider is carrying right now. */
 export function loadActiveOrders() {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.find({ status: { $in: ACTIVE_ORDER_STATUSES } });
 }
 
 /** Orders waiting for a rider. */
 export function loadPendingOrders() {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.find({ status: 'PENDING' });
 }
 
 /** Online riders, plus any rider still carrying an order (they finish it even if offline). */
 export function loadRidersForStartup(carrierIds) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Rider.find({ $or: [{ availabilityStatus: 'ONLINE' }, { _id: { $in: carrierIds } }] });
 }
 
 export function loadRider(riderId) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Rider.findById(riderId);
 }
 
 /** Put orders whose rider no longer exists back in the queue. */
 export function requeueOrders(orderIds, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.updateMany(
     { _id: { $in: orderIds } },
     { $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date(now) } }
@@ -80,6 +108,7 @@ export function requeueOrders(orderIds, now) {
  * PENDING. Resolves true when it was saved, false when the order had already changed.
  */
 export async function saveAssignment(orderId, riderId, score, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
     { $set: { status: 'ASSIGNED', assignedRiderId: riderId, assignedAt: new Date(now), allocationScore: score, offer: null } }
@@ -88,6 +117,7 @@ export async function saveAssignment(orderId, riderId, score, now) {
 }
 
 export function saveAllocationRecord(orderId, riderId, result) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return AllocationHistory.create({
     orderId,
     riderId,
@@ -99,6 +129,7 @@ export function saveAllocationRecord(orderId, riderId, result) {
 
 /** First arrival at the restaurant only: a repeat after a restart keeps the original time. */
 export function saveRiderArrivedAtRestaurant(orderId, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.updateOne({ _id: orderId, riderArrivedAt: null }, { $set: { riderArrivedAt: new Date(now) } });
 }
 
@@ -107,6 +138,7 @@ export function saveRiderArrivedAtRestaurant(orderId, now) {
  * @returns {Promise<boolean>} true when this call saved the pickup, false when it was already saved.
  */
 export async function savePickup(orderId, now, actualWait_s) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'ASSIGNED' },
     { $set: { status: 'PICKED_UP', pickedUpAt: new Date(now), actualWait_s } }
@@ -119,6 +151,7 @@ export async function savePickup(orderId, now, actualWait_s) {
  * @returns {Promise<boolean>} true when this call saved the delivery, false when it was already saved.
  */
 export async function saveDelivery(orderId, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PICKED_UP' },
     { $set: { status: 'DELIVERED', deliveredAt: new Date(now), ...CLEARED_ROUTE_FIELDS } }
@@ -132,6 +165,7 @@ export async function saveDelivery(orderId, now) {
  * @returns {Promise<boolean>} true when saved, false when the order had already moved on.
  */
 export async function saveRiderCancellation(orderId, riderId, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'ASSIGNED', assignedRiderId: riderId },
     {
@@ -143,6 +177,7 @@ export async function saveRiderCancellation(orderId, riderId, now) {
 }
 
 export function loadOrder(orderId) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.findById(orderId);
 }
 
@@ -151,6 +186,7 @@ export function loadOrder(orderId) {
  * @returns {Promise<boolean>} true when saved, false when the order is past pickup.
  */
 export async function savePrepEstimate(orderId, foodReadyAt) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: { $in: ['PENDING', 'ASSIGNED'] } },
     { $set: { prepReadyAt: foodReadyAt } }
@@ -164,6 +200,7 @@ export async function savePrepEstimate(orderId, foodReadyAt) {
  * @returns {Promise<boolean>} true when saved, false when the order is past pickup or finished.
  */
 export async function saveRestaurantRejection(orderId, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: { $in: ['PENDING', 'ASSIGNED'] } },
     { $set: {
@@ -176,6 +213,7 @@ export async function saveRestaurantRejection(orderId, now) {
 
 /** First dispatch attempt only: a later one (or one after a restart) keeps the original time. */
 export function saveDispatchStarted(orderId, now) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.updateOne({ _id: orderId, dispatchStartedAt: null }, { $set: { dispatchStartedAt: new Date(now) } });
 }
 
@@ -184,6 +222,7 @@ export function saveDispatchStarted(orderId, now) {
  * @returns {Promise<boolean>} true when saved, false when the order changed or is already offered.
  */
 export async function saveOffer(orderId, riderId, expiresAtMs) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING', offer: null },
     { $set: { offer: { riderId, expiresAt: new Date(expiresAtMs) } } }
@@ -193,6 +232,7 @@ export async function saveOffer(orderId, riderId, expiresAtMs) {
 
 /** Close the order's offer; a rider who rejected is remembered so they are never asked again. */
 export function clearOffer(orderId, { rejectedRiderId } = {}) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const update = { $set: { offer: null } };
   if (rejectedRiderId) update.$addToSet = { rejectedRiderIds: rejectedRiderId };
   return Order.updateOne({ _id: orderId }, update);
@@ -204,6 +244,7 @@ export function clearOffer(orderId, { rejectedRiderId } = {}) {
  * @returns {Promise<boolean>} true when it was saved, false when the order had already changed.
  */
 export async function saveCancellation(orderId, now, reason) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
     { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason, offer: null, ...CLEARED_ROUTE_FIELDS } }
@@ -212,6 +253,7 @@ export async function saveCancellation(orderId, now, reason) {
 }
 
 export function saveOrderRoute(orderId, route, hasNextLeg) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Order.findByIdAndUpdate(orderId, {
     leg1Coords:     route.leg1Coords,
     leg2Coords:     hasNextLeg ? route.leg2Coords : [],
@@ -225,20 +267,24 @@ export function saveOrderRoute(orderId, route, hasNextLeg) {
 /** Rider position, status and current leg. On restart the engine recomputes the status from the
  *  orders and the position from the leg, so a stale value here does no harm. */
 export function saveRiderState(riderId, fields) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Rider.findByIdAndUpdate(riderId, fields);
 }
 
 export function saveRiderAvailability(riderId, availabilityStatus) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Rider.updateOne({ _id: riderId }, { $set: { availabilityStatus } });
 }
 
 /** The road route for the rider's current leg arrived. */
 export function saveRiderLegRoute(riderId, coords) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Rider.updateOne({ _id: riderId, currentLeg: { $ne: null } }, { $set: { 'currentLeg.coords': coords } });
 }
 
 /** One write of every rider's position at shutdown. */
 export function saveFinalPositions(riderEntries) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   if (!riderEntries.length) return Promise.resolve();
   return Rider.bulkWrite(riderEntries.map(([riderId, rider]) => ({
     updateOne: {
@@ -256,6 +302,7 @@ export function saveFinalPositions(riderEntries) {
  * @param {string} type  e.g. 'created', 'assigned', 'picked_up', 'delivered', 'cancelled'
  */
 export function appendOrderEvent(orderId, type, { riderId = null, details } = {}) {
+  if (isSimulatedOutage()) return Promise.resolve(); // the log is best effort
   return OrderEvent.create({ orderId, type, riderId, details, at: new Date() })
     .catch(err => log.error('order event write failed', { orderId, type, error: err.message }));
 }
@@ -267,6 +314,7 @@ export function appendOrderEvent(orderId, type, { riderId = null, details } = {}
  * @returns {Promise<boolean>} true when `holder` now holds the lease.
  */
 export async function tryAcquireLease(leaseId, holder, durationMs) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   const now = new Date();
   try {
     const lease = await Lease.findOneAndUpdate(
@@ -282,5 +330,6 @@ export async function tryAcquireLease(leaseId, holder, durationMs) {
 }
 
 export function releaseLease(leaseId, holder) {
+  if (isSimulatedOutage()) return simulatedOutageError();
   return Lease.deleteOne({ _id: leaseId, holder });
 }

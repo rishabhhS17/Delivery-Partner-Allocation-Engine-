@@ -25,6 +25,7 @@ import { enqueueOrder, scheduleWake, dequeueOrder } from './wakeList.js';
 export { startLeaderElection, resignLeadership };
 import {
   saveFinalPositions, appendOrderEvent, clearOffer, saveRiderCancellation, loadOrder, saveRestaurantRejection,
+  simulateDatabaseOutage as startSimulatedOutage, getSimulatedOutageUntil,
 } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
@@ -244,6 +245,23 @@ export function restaurantRejectedOrder(orderId) {
     log.warn('restaurant rejected the order, cancelled', { orderId: oid, riderId: carrierId });
     return 'cancelled';
   });
+}
+
+// ─── Presenter test hook ─────────────────────────────────────────────────────
+
+/**
+ * Make every engine database call fail for durationMs, as in a real outage: dispatch pauses,
+ * riders keep moving, and it all resumes on its own (decision I3).
+ * @returns {number} epoch ms the simulated outage ends
+ */
+export function simulateDatabaseOutage(durationMs) {
+  log.warn('simulated database outage started', { durationMs });
+  return startSimulatedOutage(durationMs);
+}
+
+/** @returns {number|null} epoch ms the simulated outage ends, or null when there is none */
+export function getDatabaseOutageEnd() {
+  return getSimulatedOutageUntil();
 }
 
 // ─── Rider availability ──────────────────────────────────────────────────────

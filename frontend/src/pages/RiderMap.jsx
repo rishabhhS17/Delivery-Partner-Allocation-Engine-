@@ -10,6 +10,7 @@ import LiveDot from '../components/common/LiveDot';
 import { addLabelPillImage, makeLabelLayer } from '../components/map/mapLabels.js';
 import RiderMarker from '../components/map/RiderMarker.jsx';
 import PresenterDrawer from '../components/map/PresenterDrawer.jsx';
+import EdgeCaseButtons from '../components/map/EdgeCaseButtons.jsx';
 import { useSimulation } from '../context/SimulationContext';
 import { getOrder, getRestaurants } from '../api/endpoints';
 import styles from './RiderMap.module.css';
@@ -203,7 +204,9 @@ export default function RiderMap() {
           </Button>
         }
       />
-      <PresenterDrawer isOpen={isPresenterOpen} onClose={() => setIsPresenterOpen(false)} />
+      <PresenterDrawer isOpen={isPresenterOpen} onClose={() => setIsPresenterOpen(false)}>
+        {isPresenterOpen && <EdgeCaseButtons />}
+      </PresenterDrawer>
 
       <div className={styles.mapPanelWrap}>
         <MapPanel

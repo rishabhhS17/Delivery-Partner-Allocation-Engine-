@@ -14,6 +14,7 @@ import configRoutes      from './config.js';
 import simulationRoutes  from './simulation.js';
 import streamRoutes      from './stream.js';
 import intakeRoutes      from './intake.js';
+import presenterRoutes   from './presenter.js';
 
 const router = express.Router();
 
@@ -43,5 +44,6 @@ router.use('/config',      protect, configRoutes);
 router.use('/simulation',  protect, simulationRoutes);
 router.use('/stream',      protect, streamRoutes);
 router.use('/intake',      intakeRoutes);            // upstream order service, own key (no login)
+router.use('/presenter',   protect, presenterRoutes);
 
 export default router;
