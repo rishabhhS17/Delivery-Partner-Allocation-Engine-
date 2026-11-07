@@ -180,6 +180,7 @@ JWT_SECRET=your_jwt_secret                    # required
 ADMIN_PASSWORD=your_admin_password            # required
 MAPBOX_TOKEN=your_mapbox_token                # required for road-snapped routing
 MAPBOX_DAILY_BUDGET=3000                      # optional — Mapbox calls per UTC day before straight-line fallback
+ORDER_SERVICE_KEY=your_service_key            # optional — enables POST /api/intake/orders for an upstream order service
 SESSION_SECRET=your_session_secret            # required when NODE_ENV=production
 PORT=5000                                     # optional (default 5000)
 FRONTEND_URL=http://localhost:5173            # optional — needed in production for CORS
@@ -213,7 +214,7 @@ npm run dev        # http://localhost:5173
 
 ## 📡 API Reference
 
-All routes are prefixed with `/api`. Everything except `/auth` and `/health` requires a **Bearer JWT**.
+All routes are prefixed with `/api`. Everything except `/auth`, `/health` and `/intake` (which uses its own service key) requires a **Bearer JWT**.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
@@ -231,6 +232,7 @@ All routes are prefixed with `/api`. Everything except `/auth` and `/health` req
 | `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
 | `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
 | `GET` | `/stream` | Live feed (Server-Sent Events): a snapshot, then the fleet every second and each order event |
+| `POST` | `/intake/orders` | Upstream order service intake (`X-Service-Key` header, no login). Same `externalOrderId` → the existing order is returned, never a duplicate |
 
 ### Live stream events (`GET /api/stream`, server → client)
 `snapshot` (sent first on every connection: fleet, queue depth, route lines, recent assignments) · `simulation:tick` (every rider, every second) · `simulation:status` · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled`. A reconnecting browser gets a fresh `snapshot`; missed events are not replayed.

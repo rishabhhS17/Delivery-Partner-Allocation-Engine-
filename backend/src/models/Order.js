@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 
 const OrderSchema = new mongoose.Schema(
   {
+    // The upstream order service's own id for this order. Unique, so a retried request can never
+    // create a second order — even after a restart (decision H2). Absent for internal orders.
+    externalOrderId: { type: String },
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     restaurantName: { type: String, required: true },
     restaurantLat: { type: Number, required: true },
@@ -69,5 +72,6 @@ OrderSchema.index({ assignedRiderId: 1, deliveredAt: 1 });
 // lets Mongo serve the "most recent N" query as a cheap index scan instead of an
 // in-memory sort of the whole collection.
 OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ externalOrderId: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('Order', OrderSchema);

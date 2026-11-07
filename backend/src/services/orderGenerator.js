@@ -30,7 +30,7 @@ async function pickPair() {
 // order for a chosen customer at a chosen restaurant) instead of the default random pairing.
 // Omitting both (the existing behavior — bulkCreateOrders and the auto-order timer both call
 // this with no arguments) falls through to pickPair() unchanged.
-export async function createOrder({ customerId, restaurantId } = {}) {
+export async function createOrder({ customerId, restaurantId, externalOrderId } = {}) {
   let restaurant, customer;
 
   if (customerId && restaurantId) {
@@ -54,6 +54,7 @@ export async function createOrder({ customerId, restaurantId } = {}) {
   });
 
   return Order.create({
+    externalOrderId,
     restaurantId:   restaurant._id,
     restaurantName: restaurant.name,
     restaurantLat:  restaurant.latitude,

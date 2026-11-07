@@ -28,6 +28,9 @@ export const config = {
   // The free tier is ~100,000 a month, so 3,000 a day stays inside it (decision K4).
   mapboxDailyBudget: Number(process.env.MAPBOX_DAILY_BUDGET) || 3000,
   sessionSecret:     process.env.SESSION_SECRET     || 'dpae-session-secret',
+  // Shared key the upstream order service sends as X-Service-Key on POST /api/intake/orders
+  // (decision H2). Unset → order intake is switched off.
+  orderServiceKey:   process.env.ORDER_SERVICE_KEY  || '',
   frontendUrl:       process.env.FRONTEND_URL        || 'http://localhost:3000',
   googleClientId:    process.env.GOOGLE_CLIENT_ID    || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',

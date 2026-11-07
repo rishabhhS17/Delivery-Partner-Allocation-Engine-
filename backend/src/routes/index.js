@@ -13,6 +13,7 @@ import allocationRoutes  from './allocation.js';
 import configRoutes      from './config.js';
 import simulationRoutes  from './simulation.js';
 import streamRoutes      from './stream.js';
+import intakeRoutes      from './intake.js';
 
 const router = express.Router();
 
@@ -41,5 +42,6 @@ router.use('/allocation',  protect, allocationRoutes);
 router.use('/config',      protect, configRoutes);
 router.use('/simulation',  protect, simulationRoutes);
 router.use('/stream',      protect, streamRoutes);
+router.use('/intake',      intakeRoutes);            // upstream order service, own key (no login)
 
 export default router;
