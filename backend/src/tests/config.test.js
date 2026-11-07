@@ -50,3 +50,13 @@ test('the search range widens 5 → 7 → 10 km at 60 s and 120 s (decision G1)'
   assert.equal(searchRangeKm(120_000), 10);
   assert.equal(searchRangeKm(10 * 60_000), 10);
 });
+
+test('rider bot behaviour rates are validated (decision G4)', async () => {
+  const { getRiderBotBehaviour, setRiderBotBehaviour, DEFAULT_RIDER_BOT_BEHAVIOUR } = await import('../config/constants.js');
+  assert.throws(() => setRiderBotBehaviour({ rejectPercent: 101 }), /between 0 and 100/);
+  assert.throws(() => setRiderBotBehaviour({ rejectPercent: 80, ignorePercent: 30 }), /must not exceed 100/);
+  assert.throws(() => setRiderBotBehaviour({ replyMinS: 9, replyMaxS: 3 }), /replyMinS/);
+  setRiderBotBehaviour({ rejectPercent: 0, ignorePercent: 0, cancelBeforePickupPercent: 0 });
+  assert.equal(getRiderBotBehaviour().rejectPercent, 0, 'a perfect bot is allowed');
+  setRiderBotBehaviour(DEFAULT_RIDER_BOT_BEHAVIOUR);
+});

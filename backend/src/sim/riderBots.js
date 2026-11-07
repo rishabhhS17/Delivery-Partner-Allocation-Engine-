@@ -3,11 +3,13 @@
 // leg the engine gave it (decision B2) and reports back, the way a rider's phone would: a new
 // position, "I've arrived", "I've collected the food". The engine decides everything else.
 //
-// The bots keep no state: a position is a pure function of the leg (start time + route) and the
+// Movement keeps no state: a position is a pure function of the leg (start time + route) and the
 // clock, so after a restart every rider carries on from where they should be (decision B5).
+// The only bot memory is each rider's pending decisions (how to answer an offer, whether to
+// cancel before pickup), drawn at the rates set in Settings (decision G4).
 // TODO(real-riders): a real rider's GPS pings and app taps would call the same engine commands.
 
-import { RIDER_SPEED_KMH, TICK_INTERVAL_MS } from '../config/constants.js';
+import { RIDER_SPEED_KMH, TICK_INTERVAL_MS, getRiderBotBehaviour } from '../config/constants.js';
 import { positionAlongLeg } from '../utils/polyline.js';
 import {
   getRiderTasks,
@@ -15,13 +17,17 @@ import {
   riderArrived,
   riderCollectedFood,
   acceptOffer,
+  rejectOffer,
+  riderCancelledOrder,
 } from '../engine/index.js';
 
 const RIDER_SPEED_METRES_PER_SECOND = RIDER_SPEED_KMH / 3.6;
 
 let botTimer = null;
 let lastTickMs = null;
-const answeringOffers = new Set(); // `${riderId}:${orderId}` replies in flight
+// What each bot decided, so it decides once per offer / per order (the rates in Settings).
+const offerReplies = new Map();      // `${riderId}:${orderId}` → { answer, answerAt, isSent }
+const pickupPlans  = new Map();      // `${riderId}:${orderId}` → { cancelAt: ms | null, isSent }
 
 /** How long the last rider-bot tick took, in ms (shown on /api/health). */
 export function getRiderBotTickMs() {
@@ -46,8 +52,10 @@ function moveAllRiders() {
 
 function moveEachRider() {
   const now = Date.now();
+  const liveKeys = new Set();
   for (const task of getRiderTasks()) {
-    if (task.offer) answerOffer(task.riderId, task.offer.orderId);
+    if (task.offer) liveKeys.add(answerOffer(task.riderId, task.offer.orderId, now));
+    if (task.nextStop?.type === 'PICKUP') liveKeys.add(maybeCancelBeforePickup(task.riderId, task.nextStop.orderId, now));
     if (task.status === 'WAITING') {
       if (now >= task.waitingUntil) riderCollectedFood(task.riderId, task.nextStop.orderId);
       continue;
@@ -59,12 +67,50 @@ function moveEachRider() {
     reportRiderPosition(task.riderId, position.lat, position.lng, position.segmentIdx);
     if (position.isComplete) riderArrived(task.riderId, task.nextStop);
   }
+  forgetFinishedPlans(liveKeys);
 }
 
-// For now every bot accepts every offer straight away.
-function answerOffer(riderId, orderId) {
+// Decide once how to answer an offer — reject, ignore or accept, at the configured rates — and
+// answer after a human-like pause. Returns the plan's key so finished plans can be forgotten.
+function answerOffer(riderId, orderId, now) {
   const key = `${riderId}:${orderId}`;
-  if (answeringOffers.has(key)) return;
-  answeringOffers.add(key);
-  acceptOffer(riderId, orderId).finally(() => answeringOffers.delete(key));
+  let reply = offerReplies.get(key);
+  if (!reply) {
+    const behaviour = getRiderBotBehaviour();
+    const roll = Math.random() * 100;
+    const answer = roll < behaviour.rejectPercent ? 'reject'
+      : roll < behaviour.rejectPercent + behaviour.ignorePercent ? 'ignore'
+      : 'accept';
+    const replyAfterS = behaviour.replyMinS + Math.random() * (behaviour.replyMaxS - behaviour.replyMinS);
+    reply = { answer, answerAt: now + replyAfterS * 1000, isSent: false };
+    offerReplies.set(key, reply);
+  }
+  if (!reply.isSent && reply.answer !== 'ignore' && now >= reply.answerAt) {
+    reply.isSent = true;
+    const send = reply.answer === 'reject' ? rejectOffer : acceptOffer;
+    send(riderId, orderId).then((result) => { if (result === 'failed') reply.isSent = false; });
+  }
+  return key;
+}
+
+// Decide once per accepted order whether this rider will cancel it before pickup, and if so
+// when (a few seconds into the ride to the restaurant).
+function maybeCancelBeforePickup(riderId, orderId, now) {
+  const key = `${riderId}:${orderId}`;
+  let plan = pickupPlans.get(key);
+  if (!plan) {
+    const willCancel = Math.random() * 100 < getRiderBotBehaviour().cancelBeforePickupPercent;
+    plan = { cancelAt: willCancel ? now + (3 + Math.random() * 15) * 1000 : null, isSent: false };
+    pickupPlans.set(key, plan);
+  }
+  if (plan.cancelAt && !plan.isSent && now >= plan.cancelAt) {
+    plan.isSent = true;
+    riderCancelledOrder(riderId, orderId).then((result) => { if (result === 'failed') plan.isSent = false; });
+  }
+  return key;
+}
+
+function forgetFinishedPlans(liveKeys) {
+  for (const key of offerReplies.keys()) if (!liveKeys.has(key)) offerReplies.delete(key);
+  for (const key of pickupPlans.keys()) if (!liveKeys.has(key)) pickupPlans.delete(key);
 }

@@ -3,6 +3,7 @@ import {
   getWeights, setWeights, DEFAULT_WEIGHTS,
   getOrderTtl, setOrderTtl,
   getH3Config, setH3Config,
+  getRiderBotBehaviour, setRiderBotBehaviour,
 } from '../config/constants.js';
 import { clearCandidateCache } from '../services/allocationEngine.js';
 
@@ -71,6 +72,22 @@ router.put('/h3', (req, res) => {
     setH3Config(req.body ?? {});
     clearCandidateCache();
     res.json(getH3Config());
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// ── Bot behaviour (applies live) ──────────────────────────────────────────────
+// GET /api/config/bots → { rider: { replyMinS, replyMaxS, rejectPercent, ignorePercent, cancelBeforePickupPercent } }
+router.get('/bots', (req, res) => {
+  res.json({ rider: getRiderBotBehaviour() });
+});
+
+// PUT /api/config/bots  body: { rider?: { …any of the fields above } }
+router.put('/bots', (req, res) => {
+  try {
+    if (req.body?.rider) setRiderBotBehaviour(req.body.rider);
+    res.json({ rider: getRiderBotBehaviour() });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

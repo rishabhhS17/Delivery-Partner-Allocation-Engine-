@@ -44,6 +44,8 @@ export const getTtl = ()     => api.get('/config/ttl');
 export const setTtl = (body) => api.put('/config/ttl', body);
 export const getH3  = ()     => api.get('/config/h3');
 export const setH3  = (body) => api.put('/config/h3', body);
+export const getBotBehaviour = ()     => api.get('/config/bots');
+export const setBotBehaviour = (body) => api.put('/config/bots', body);
 
 // Analytics
 export const getAnalytics = (opts = {}) => api.get('/analytics', opts);

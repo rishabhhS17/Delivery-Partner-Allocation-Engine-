@@ -143,3 +143,34 @@ export function setWeights({ etar, load }) {
     load: load / total,
   };
 }
+
+// ── Bot behaviour (decision G4) ──────────────────────────────────────────────
+// How the simulated riders behave, adjustable live from Settings. All rates 0 = a perfect bot.
+export const DEFAULT_RIDER_BOT_BEHAVIOUR = {
+  replyMinS:                 2,   // seconds before a rider answers an offer…
+  replyMaxS:                 8,   // …picked at random between these
+  rejectPercent:             15,  // share of offers turned down
+  ignorePercent:             5,   // share of offers left unanswered (they lapse after 30 s)
+  cancelBeforePickupPercent: 2,   // share of accepted orders cancelled on the way to the restaurant
+};
+
+let currentRiderBotBehaviour = { ...DEFAULT_RIDER_BOT_BEHAVIOUR };
+
+export function getRiderBotBehaviour() {
+  return currentRiderBotBehaviour;
+}
+
+/** Validates and applies a partial update; throws with a readable message on bad input. */
+export function setRiderBotBehaviour(update = {}) {
+  const next = { ...currentRiderBotBehaviour };
+  for (const key of Object.keys(DEFAULT_RIDER_BOT_BEHAVIOUR)) {
+    if (update[key] === undefined) continue;
+    const value = Number(update[key]);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${key} must be a number of 0 or more`);
+    if (key.endsWith('Percent') && value > 100) throw new Error(`${key} must be between 0 and 100`);
+    next[key] = value;
+  }
+  if (next.replyMinS > next.replyMaxS) throw new Error('replyMinS must not be more than replyMaxS');
+  if (next.rejectPercent + next.ignorePercent > 100) throw new Error('rejectPercent + ignorePercent must not exceed 100');
+  currentRiderBotBehaviour = next;
+}

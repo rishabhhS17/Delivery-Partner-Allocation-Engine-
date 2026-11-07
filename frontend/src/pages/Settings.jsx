@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import {
   getWeights, setWeights as saveWeights,
   getTtl, setTtl, getH3, setH3,
+  getBotBehaviour, setBotBehaviour,
 } from '../api/endpoints';
 import styles from './Settings.module.css';
 
@@ -24,6 +25,49 @@ const GEO_FIELDS = [
     description: 'Hexagon grid fineness (0–15). Applies after a server restart.' },
 ];
 
+// Bot behaviour (decision G4): how the simulated riders act. 0% everywhere = a perfect bot.
+const BOT_GROUPS = [
+  {
+    group: 'rider',
+    title: 'Rider bot behaviour',
+    fields: [
+      { key: 'replyMinS', label: 'Reply after, min (s)', step: 1, description: 'Shortest pause before a rider answers an offer.' },
+      { key: 'replyMaxS', label: 'Reply after, max (s)', step: 1, description: 'Longest pause before a rider answers an offer.' },
+      { key: 'rejectPercent', label: 'Reject (%)', step: 1, description: 'Offers turned down. That rider is never offered the order again.' },
+      { key: 'ignorePercent', label: 'Ignore (%)', step: 1, description: 'Offers left unanswered; they lapse after 30 s. 3 in a row → offline.' },
+      { key: 'cancelBeforePickupPercent', label: 'Cancel before pickup (%)', step: 1, description: 'Accepted orders given back on the way to the restaurant.' },
+    ],
+  },
+];
+
+function BotBehaviourSection({ group, title, fields, values, onChange }) {
+  return (
+    <>
+      <Typography variant="h6" className={styles.sectionTitle}>{title}</Typography>
+      <div className={styles.weightGrid}>
+        {fields.map(({ key, label, description, step }) => (
+          <Card elevation={0} key={key}>
+            <CardContent>
+              <Typography variant="body2" className={styles.weightLabel}>{label}</Typography>
+              <Typography variant="h4" className={styles.weightValue}>{values?.[key] ?? '—'}</Typography>
+              <Typography variant="body2" className={styles.weightDesc}>{description}</Typography>
+              <TextField
+                type="number"
+                size="small"
+                value={values?.[key] ?? ''}
+                onChange={(e) => onChange(group, key, e.target.value)}
+                fullWidth
+                className={styles.weightInput}
+                inputProps={{ min: 0, step }}
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function Settings() {
   const [weights, setWeights]   = useState({ etar: 0.71, load: 0.29 });
   const [inputs, setInputs]     = useState({ etar: '0.71', load: '0.29' });
@@ -37,7 +81,36 @@ export default function Settings() {
   });
   const [geoSaving, setGeoSaving] = useState(false);
 
+  const [botInputs, setBotInputs] = useState(null); // { rider: {…} } as strings while editing
+  const [botSaving, setBotSaving] = useState(false);
+
   const toast = useToast();
+
+  useEffect(() => {
+    getBotBehaviour()
+      .then((res) => setBotInputs(res.data))
+      .catch(() => {});
+  }, []);
+
+  const handleBotChange = (group, key, value) =>
+    setBotInputs((prev) => ({ ...prev, [group]: { ...prev?.[group], [key]: value } }));
+
+  const handleBotSave = async () => {
+    setBotSaving(true);
+    try {
+      const body = {};
+      for (const { group, fields } of BOT_GROUPS) {
+        body[group] = Object.fromEntries(fields.map(({ key }) => [key, Number(botInputs?.[group]?.[key])]));
+      }
+      const res = await setBotBehaviour(body);
+      setBotInputs(res.data);
+      toast.success('Bot behaviour updated');
+    } catch (err) {
+      toast.error(err.response?.data?.message ?? 'Failed to save bot behaviour');
+    } finally {
+      setBotSaving(false);
+    }
+  };
 
   useEffect(() => {
     getWeights()
@@ -210,6 +283,28 @@ export default function Settings() {
           className={styles.saveBtn}
         >
           {geoSaving ? <Spinner size="sm" /> : 'Save geo & timing'}
+        </Button>
+      </div>
+
+      <Alert severity="info" className={styles.alert}>
+        Bot behaviour applies live. Set every rate to 0 for perfect bots.
+      </Alert>
+      {BOT_GROUPS.map((botGroup) => (
+        <BotBehaviourSection
+          key={botGroup.group}
+          {...botGroup}
+          values={botInputs?.[botGroup.group]}
+          onChange={handleBotChange}
+        />
+      ))}
+      <div className={styles.saveRow}>
+        <Button
+          variant="contained"
+          onClick={handleBotSave}
+          disabled={botSaving || !botInputs}
+          className={styles.saveBtn}
+        >
+          {botSaving ? <Spinner size="sm" /> : 'Save bot behaviour'}
         </Button>
       </div>
     </Box>
