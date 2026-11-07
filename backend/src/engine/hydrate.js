@@ -6,7 +6,9 @@ import { _meta } from './itinerary.js';
 import { _freeSlot, _addToH3 } from './h3Index.js';
 import { positionAlongLeg } from '../utils/polyline.js';
 import { _beginLegToHead, _fetchHeadRoute } from './riderLifecycle.js';
-import { loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders } from './storage.js';
+import {
+  loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders, appendOrderEvent,
+} from './storage.js';
 
 // ─── Hydration ───────────────────────────────────────────────────────────────
 // Rebuilds the engine's memory from the database. The orders are the source of truth for who
@@ -82,6 +84,7 @@ export async function hydrate() {
   const ownerlessOrderIds = [...ordersByRider.values()].flat().map(o => o._id);
   if (ownerlessOrderIds.length) {
     await requeueOrders(ownerlessOrderIds, now);
+    for (const orderId of ownerlessOrderIds) appendOrderEvent(orderId, 'requeued', { details: { reason: 'rider_missing' } });
     console.warn(`[engine] re-queued ${ownerlessOrderIds.length} order(s) whose rider no longer exists`);
   }
 

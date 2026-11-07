@@ -9,6 +9,7 @@
 import Rider from '../models/Rider.js';
 import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
+import OrderEvent from '../models/OrderEvent.js';
 
 const ACTIVE_ORDER_STATUSES = ['ASSIGNED', 'PICKED_UP'];
 
@@ -111,4 +112,16 @@ export function saveFinalPositions(riderEntries) {
       update: { $set: { latitude: rider.lat, longitude: rider.lng, h3Index: rider.h3Index } },
     },
   })));
+}
+
+// ─── Order event log ─────────────────────────────────────────────────────────
+
+/**
+ * Append one entry to the order's event log (kept 7 days). Best effort: a failed log write is
+ * reported but never blocks the change it describes.
+ * @param {string} type  e.g. 'created', 'assigned', 'picked_up', 'delivered', 'cancelled'
+ */
+export function appendOrderEvent(orderId, type, { riderId = null, details } = {}) {
+  return OrderEvent.create({ orderId, type, riderId, details, at: new Date() })
+    .catch(err => console.error(`[engine] order event '${type}' write failed:`, err.message));
 }

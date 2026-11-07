@@ -14,7 +14,7 @@ import {
 import { haversine } from '../utils/haversine.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP, runtime } from './state.js';
 import { _meta } from './itinerary.js';
-import { saveAssignment, saveAllocationRecord, saveCancellation } from './storage.js';
+import { saveAssignment, saveAllocationRecord, saveCancellation, appendOrderEvent } from './storage.js';
 import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
 
@@ -36,6 +36,7 @@ export async function _cancelExpiredOrders(now) {
       continue;
     }
     pendingQueue.delete(orderId);
+    appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
     if (runtime.io) runtime.io.emit('order:cancelled', { orderId, reason: 'no_rider' });
     console.warn('[engine] order TTL expired → CANCELLED', orderId);
   }
@@ -138,6 +139,10 @@ export async function _commitAssignment({ orderId, order, winnerId, result }) {
     return null;
   }
   pendingQueue.delete(orderId);
+  appendOrderEvent(order._id, 'assigned', {
+    riderId: result.winner.rider._id,
+    details: { score: result.score, candidatesConsidered: result.candidatesConsidered },
+  });
   saveAllocationRecord(order._id, result.winner.rider._id, result)
     .catch(err => console.error('[engine] allocation history write failed:', err.message));
 

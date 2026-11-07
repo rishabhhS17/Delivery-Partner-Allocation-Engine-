@@ -12,7 +12,7 @@ import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment, _commitAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
 import { runExclusive, startDispatchLoop, startBroadcastLoop, stopLoops } from './dispatchLoop.js';
-import { saveFinalPositions } from './storage.js';
+import { saveFinalPositions, appendOrderEvent } from './storage.js';
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -90,6 +90,9 @@ export function getStatus() {
  */
 export function addPendingOrder(order) {
   pendingQueue.set(order._id.toString(), order);
+  appendOrderEvent(order._id, 'created', {
+    details: { restaurantName: order.restaurantName, customerName: order.customerName, prepReadyAt: order.prepReadyAt },
+  });
 }
 
 /**

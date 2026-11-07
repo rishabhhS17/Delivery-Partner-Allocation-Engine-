@@ -4,7 +4,7 @@ import { getH3Config } from '../config/constants.js';
 import { riderState, activeRoutes, runtime } from './state.js';
 import { _syncIndex } from './h3Index.js';
 import {
-  savePickup, saveDelivery, saveOrderRoute, saveRiderState, saveRiderLegRoute,
+  savePickup, saveDelivery, saveOrderRoute, saveRiderState, saveRiderLegRoute, appendOrderEvent,
 } from './storage.js';
 
 // ─── Stop arrival / transitions ────────────────────────────────────────────────
@@ -25,6 +25,7 @@ export function _arriveAtStop(riderId, rider, now) {
       rider.waitingUntil    = readyMs;
       rider.pickupArrivalAt = now;
       saveRiderState(riderId, { status: 'WAITING' }).catch(() => {});
+      appendOrderEvent(head.orderId, 'rider_waiting', { riderId: rider._id, details: { foodReadyAt: new Date(readyMs) } });
     } else {
       _completePickup(riderId, rider, now);
     }
@@ -45,6 +46,7 @@ export function _completePickup(riderId, rider, now) {
 
   savePickup(head.orderId, now, actualWait_s)
     .catch(err => console.error('[engine] pickup write failed:', err.message));
+  appendOrderEvent(head.orderId, 'picked_up', { riderId: rider._id, details: { actualWait_s } });
   if (runtime.io) runtime.io.emit('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
 
   _beginLegToHead(rider, now, riderId);
@@ -59,6 +61,7 @@ function _completeDrop(riderId, rider, now) {
 
   saveDelivery(head.orderId, now)
     .catch(err => console.error('[engine] delivered write failed:', err.message));
+  appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
   if (runtime.io) runtime.io.emit('order:delivered', { orderId: oid, riderId: riderId.toString() });
 
   _syncIndex(riderId, rider);   // a slot just freed → ensure indexed
