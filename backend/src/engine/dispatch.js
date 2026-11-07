@@ -9,6 +9,7 @@ import {
   CLUBBING_RESTAURANT_RADIUS_KM,
   CLUBBING_DROP_RADIUS_KM,
   CLUBBING_BEARING_TOLERANCE_DEG,
+  MAX_SCORED_CANDIDATES,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP } from './state.js';
@@ -115,7 +116,8 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
       const r = riderState.get(rid);
       if (!r || r.status === 'WAITING') continue;   // don't disturb a parked pickup
       if (!_freeSlot(r)) continue;                   // no capacity
-      if (haversine({ lat: r.lat, lng: r.lng }, restaurant) > maxRangeKm) continue; // range gate (authority)
+      const distanceKm = haversine({ lat: r.lat, lng: r.lng }, restaurant);
+      if (distanceKm > maxRangeKm) continue;          // range gate (authority)
       const isIdle = r.orders.size === 0;
       if (!isIdle && !_clubbable(r, order)) continue; // busy → clubbing gate
       candidates.push({
@@ -123,12 +125,17 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
         startPos: { lat: r.lat, lng: r.lng },
         stops: r.stops,
         deliveryTimestamps: r.deliveryTimestamps,
+        distanceKm,
       });
     }
   }
   if (!candidates.length) return { kind: 'no_rider' };
 
-  const result = allocateClub(order, candidates, getWeights(), now);
+  // Score only the nearest few: far riders almost never win, and scoring is the costly part.
+  const nearestCandidates = candidates.length > MAX_SCORED_CANDIDATES
+    ? candidates.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, MAX_SCORED_CANDIDATES)
+    : candidates;
+  const result = allocateClub(order, nearestCandidates, getWeights(), now);
   if (!result) return { kind: 'no_rider' };
 
   const winner = result.winner.rider;

@@ -1,12 +1,9 @@
-import { TICK_INTERVAL_MS } from '../config/constants.js';
+import { TICK_INTERVAL_MS, NO_RIDER_RETRY_DELAYS_MS } from '../config/constants.js';
 import { pendingQueue, runtime } from './state.js';
 import { publish, buildFleetSnapshot } from './broadcast.js';
 import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
 import { recordDispatchRoundMs, recordBroadcastMs } from './health.js';
-import { enqueueOrder, takeDueOrderIds, scheduleWake } from './wakeList.js';
-
-// An order with no rider in range is looked at again after this long.
-const NO_RIDER_RETRY_MS = 1000;
+import { enqueueOrder, takeDueOrderIds, scheduleWake, nextNoRiderRetryDelay, resetNoRiderRetries } from './wakeList.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
@@ -93,9 +90,14 @@ async function runDispatchRound() {
 
   // Phase 2 — score only the orders whose wake-up time has come (marginal-cost clubbing + JIT
   // hold + force-assign); the rest sleep in the wake-up list.
-  for (const orderId of takeDueOrderIds(Date.now())) {
-    const order = pendingQueue.get(orderId);
-    if (!order) continue;
+  // Most urgent deadline first, so a crowded round serves the orders closest to being late.
+  const dueOrders = takeDueOrderIds(Date.now())
+    .map(orderId => pendingQueue.get(orderId))
+    .filter(Boolean)
+    .sort((a, b) => promisedByMs(a) - promisedByMs(b));
+  for (const order of dueOrders) {
+    const orderId = order._id.toString();
+    if (!pendingQueue.has(orderId)) continue;
     let decision;
     try {
       decision = _chooseAssignment(orderId, order, Date.now());
@@ -103,10 +105,13 @@ async function runDispatchRound() {
       await _cancelOrderAfterEngineError(orderId, order, err);
       continue;
     }
-    if (decision.kind === 'hold') scheduleWake(orderId, decision.wakeAt);
-    else if (decision.kind === 'no_rider') scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_MS);
-    else if (!(await _commitAssignment(decision)) && pendingQueue.has(orderId)) {
-      scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_MS); // save failed: try again shortly
+    if (decision.kind === 'hold') {
+      resetNoRiderRetries(orderId);
+      scheduleWake(orderId, decision.wakeAt);
+    } else if (decision.kind === 'no_rider') {
+      scheduleWake(orderId, Date.now() + nextNoRiderRetryDelay(orderId)); // 1 → 2 → 4 → 10 s
+    } else if (!(await _commitAssignment(decision)) && pendingQueue.has(orderId)) {
+      scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_DELAYS_MS[0]); // save failed: try again shortly
     }
   }
 }
@@ -121,4 +126,8 @@ export function startBroadcastLoop() {
     publish('simulation:tick', { riders: buildFleetSnapshot(), queueDepth: pendingQueue.size });
     recordBroadcastMs(performance.now() - startedAt);
   }, TICK_INTERVAL_MS);
+}
+
+function promisedByMs(order) {
+  return order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
 }

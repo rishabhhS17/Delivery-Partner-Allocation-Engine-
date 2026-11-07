@@ -1,4 +1,4 @@
-import { RIDER_SPEED_KMH, AGING_LOCK_S, getH3Config } from '../config/constants.js';
+import { RIDER_SPEED_KMH, AGING_LOCK_S, NO_RIDER_RETRY_DELAYS_MS, getH3Config } from '../config/constants.js';
 import { pendingQueue } from './state.js';
 
 // ─── Wake-up list ────────────────────────────────────────────────────────────
@@ -9,6 +9,7 @@ import { pendingQueue } from './state.js';
 
 const wakeAtByOrder = new Map();   // orderId → the wake-up time that counts
 const timesScoredByOrder = new Map(); // orderId → how many times dispatch has scored it
+const noRiderRetriesByOrder = new Map(); // orderId → consecutive rounds that found no rider
 const wakeEntries   = [];          // { orderId, wakeAt } sorted by wakeAt; stale entries are skipped
 
 /** Put an order in the queue, asleep until it could first need a rider. */
@@ -23,6 +24,18 @@ export function dequeueOrder(orderId) {
   pendingQueue.delete(orderId);
   wakeAtByOrder.delete(orderId);
   timesScoredByOrder.delete(orderId);
+  noRiderRetriesByOrder.delete(orderId);
+}
+
+/** How long to wait before looking for a rider again: 1 s, 2 s, 4 s, then every 10 s. */
+export function nextNoRiderRetryDelay(orderId) {
+  const retries = noRiderRetriesByOrder.get(orderId) ?? 0;
+  noRiderRetriesByOrder.set(orderId, retries + 1);
+  return NO_RIDER_RETRY_DELAYS_MS[Math.min(retries, NO_RIDER_RETRY_DELAYS_MS.length - 1)];
+}
+
+export function resetNoRiderRetries(orderId) {
+  noRiderRetriesByOrder.delete(orderId);
 }
 
 /** Count one more scoring of the order; returns the total so far. */
@@ -36,6 +49,7 @@ export function clearWakeList() {
   wakeAtByOrder.clear();
   wakeEntries.length = 0;
   timesScoredByOrder.clear();
+  noRiderRetriesByOrder.clear();
 }
 
 /** Wake the order at `wakeAt` (replaces any earlier wake-up time). */

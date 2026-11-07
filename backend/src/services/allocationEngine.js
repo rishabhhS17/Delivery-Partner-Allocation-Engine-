@@ -1,4 +1,4 @@
-import { latLngToCell, gridDisk } from 'h3-js';
+import { latLngToCell, gridDisk, getHexagonEdgeLengthAvg } from 'h3-js';
 import { haversine } from '../utils/haversine.js';
 import {
   getH3Config,
@@ -8,24 +8,35 @@ import {
   AGING_LOCK_S,
 } from '../config/constants.js';
 
-// Caches gridDisk results keyed by restaurant h3 cell. Keys are resolution-specific (a cell id
-// encodes its resolution), but a change to candidateK at the same resolution would leave stale
-// disks — so setH3Config() clears this via clearCandidateCache() below.
+// Caches gridDisk results keyed by restaurant cell + ring size (a cell id encodes its resolution).
 const diskCache = new Map();
 
 // Called by the /config/h3 route after setH3Config so the next allocation recomputes candidate
-// rings with the new resolution / candidateK instead of serving cached ones.
+// rings instead of serving cached ones.
 export function clearCandidateCache() {
   diskCache.clear();
 }
 
-export function getCandidateCells(restaurantLat, restaurantLng) {
-  const { resolution, candidateK } = getH3Config();
+/**
+ * The smallest hexagon ring around the restaurant's cell that is sure to contain every rider
+ * within rangeKm (decision F1). Worst case: rider and restaurant each sit up to one edge length
+ * from their cell centres, and each ring adds at least 1.5 edge lengths of distance.
+ * At resolution 7 (edge ≈ 1.41 km) a 5 km range gives 4 rings.
+ */
+export function searchRingSize(rangeKm, resolution) {
+  const edgeKm = getHexagonEdgeLengthAvg(resolution, 'km');
+  return Math.ceil((rangeKm + 2 * edgeKm) / (1.5 * edgeKm));
+}
+
+export function getCandidateCells(restaurantLat, restaurantLng, rangeKm = getH3Config().maxRangeKm) {
+  const { resolution } = getH3Config();
   const cell = latLngToCell(restaurantLat, restaurantLng, resolution);
-  if (!diskCache.has(cell)) {
-    diskCache.set(cell, gridDisk(cell, candidateK));
+  const ringSize = searchRingSize(rangeKm, resolution);
+  const key = `${cell}:${ringSize}`;
+  if (!diskCache.has(key)) {
+    diskCache.set(key, gridDisk(cell, ringSize));
   }
-  return diskCache.get(cell);
+  return diskCache.get(key);
 }
 
 /**

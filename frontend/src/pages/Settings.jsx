@@ -18,8 +18,6 @@ const WEIGHT_FIELDS = [
 const GEO_FIELDS = [
   { key: 'orderTtlSec',        label: 'Order TTL (s)',              min: 1,  step: 1,
     description: 'How long an order waits for a rider before it is cancelled. Applies live.' },
-  { key: 'candidateK',        label: 'Candidate-K (rider selection)', min: 0, step: 1,
-    description: 'Hex-ring radius searched for riders around a restaurant. Applies live.' },
   { key: 'restaurantServiceK', label: 'Service-K (restaurant selection)', min: 0, step: 1,
     description: 'Hex-ring radius of restaurants shown to a customer. Applies live.' },
   { key: 'resolution',        label: 'H3 resolution',              min: 0,  step: 1,
@@ -32,9 +30,10 @@ export default function Settings() {
   const [saving, setSaving]     = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
 
-  // Geo + timing config (TTL / H3 resolution / candidate + service K).
+  // Geo + timing config (TTL / H3 resolution / service K). The rider search ring is derived from
+  // the max range, so it has no knob.
   const [geoInputs, setGeoInputs] = useState({
-    orderTtlSec: '', candidateK: '', restaurantServiceK: '', resolution: '',
+    orderTtlSec: '', restaurantServiceK: '', resolution: '',
   });
   const [geoSaving, setGeoSaving] = useState(false);
 
@@ -57,7 +56,6 @@ export default function Settings() {
       .then(([ttlRes, h3Res]) => {
         setGeoInputs({
           orderTtlSec:        String(Math.round((ttlRes.data.orderTtlMs ?? 0) / 1000)),
-          candidateK:         String(h3Res.data.candidateK ?? ''),
           restaurantServiceK: String(h3Res.data.restaurantServiceK ?? ''),
           resolution:         String(h3Res.data.resolution ?? ''),
         });
@@ -74,12 +72,10 @@ export default function Settings() {
       await setTtl({ orderTtlMs: Math.round((parseFloat(geoInputs.orderTtlSec) || 0) * 1000) });
       const h3Res = await setH3({
         resolution:         parseInt(geoInputs.resolution, 10),
-        candidateK:         parseInt(geoInputs.candidateK, 10),
         restaurantServiceK: parseInt(geoInputs.restaurantServiceK, 10),
       });
       setGeoInputs((prev) => ({
         ...prev,
-        candidateK:         String(h3Res.data.candidateK),
         restaurantServiceK: String(h3Res.data.restaurantServiceK),
         resolution:         String(h3Res.data.resolution),
       }));
@@ -178,7 +174,7 @@ export default function Settings() {
       <Typography variant="h6" className={styles.sectionTitle}>Geo &amp; Timing</Typography>
 
       <Alert severity="info" className={styles.alert}>
-        TTL and the two K radii apply immediately. Changing the H3 resolution only takes full
+        TTL and the service radius apply immediately; the rider search ring follows the max range. Changing the H3 resolution only takes full
         effect after the server restarts, since riders are indexed into the grid when the engine
         loads its state.
       </Alert>

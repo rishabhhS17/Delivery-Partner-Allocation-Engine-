@@ -1,5 +1,4 @@
 export const H3_RESOLUTION          = 7;
-export const H3_CANDIDATE_K         = 20;
 export const H3_SERVICE_AREA_K      = 5;
 // Rings of H3 res-7 cells (~2 km each) that define a customer's restaurant service
 // area — restaurants outside this hexagon disk aren't shown when ordering.
@@ -29,8 +28,13 @@ export const JIT_GRACE_MAX_S = 20;
 
 // Stage 2 — the authority for "in range". H3 is only candidate generation; a rider
 // is a real candidate only if its LIVE haversine distance to the restaurant is within
-// maxRangeKm. Runtime-tunable via PUT /config/h3 (same pattern as candidateK).
+// maxRangeKm. Runtime-tunable via PUT /config/h3. The H3 search ring is derived from it
+// (see searchRingSize in services/allocationEngine.js), so there is no separate ring knob.
 export const MAX_ALLOCATION_RANGE_KM = 5;
+// Only this many of the nearest in-range riders are scored for an order (decision F1).
+export const MAX_SCORED_CANDIDATES = 50;
+// An order with no rider in range is looked at again after these delays (then every 10 s).
+export const NO_RIDER_RETRY_DELAYS_MS = [1000, 2000, 4000, 10_000];
 
 // Stage 3 — capped interleaved clubbing (Model A) + anti-starvation.
 export const CLUBBING_CAP                   = 2;    // N-general ceiling; nothing hardcoded to 2
@@ -68,7 +72,6 @@ export function setOrderTtl(ms) {
 
 let currentH3 = {
   resolution:         H3_RESOLUTION,
-  candidateK:         H3_CANDIDATE_K,
   restaurantServiceK: RESTAURANT_SERVICE_K,
   maxRangeKm:         MAX_ALLOCATION_RANGE_KM,
 };
@@ -77,17 +80,12 @@ export function getH3Config() {
   return currentH3;
 }
 
-export function setH3Config({ resolution, candidateK, restaurantServiceK, maxRangeKm } = {}) {
+export function setH3Config({ resolution, restaurantServiceK, maxRangeKm } = {}) {
   const next = { ...currentH3 };
   if (resolution !== undefined) {
     if (!Number.isInteger(resolution) || resolution < 0 || resolution > 15)
       throw new Error('resolution must be an integer between 0 and 15');
     next.resolution = resolution;
-  }
-  if (candidateK !== undefined) {
-    if (!Number.isInteger(candidateK) || candidateK < 0)
-      throw new Error('candidateK must be a non-negative integer');
-    next.candidateK = candidateK;
   }
   if (restaurantServiceK !== undefined) {
     if (!Number.isInteger(restaurantServiceK) || restaurantServiceK < 0)

@@ -56,14 +56,14 @@ router.put('/ttl', (req, res) => {
 });
 
 // ── H3 grid config ────────────────────────────────────────────────────────────
-// GET /api/config/h3 → { resolution, candidateK, restaurantServiceK, maxRangeKm }
+// GET /api/config/h3 → { resolution, restaurantServiceK, maxRangeKm }
 router.get('/h3', (req, res) => {
   res.json(getH3Config());
 });
 
-// PUT /api/config/h3  body: { resolution?, candidateK?, restaurantServiceK?, maxRangeKm? }
-// candidateK (rider selection), restaurantServiceK (restaurant selection) and maxRangeKm (the
-// live-distance range gate — the authority for "in range") apply immediately; resolution changes
+// PUT /api/config/h3  body: { resolution?, restaurantServiceK?, maxRangeKm? }
+// restaurantServiceK (restaurant selection) and maxRangeKm (the live-distance range gate — the
+// authority for "in range"; the rider search ring is derived from it) apply immediately; resolution changes
 // only fully take effect after a simulation restart (riders re-bucket on hydrate). The
 // candidate-cell cache is cleared so the next allocation uses the new values.
 router.put('/h3', (req, res) => {
