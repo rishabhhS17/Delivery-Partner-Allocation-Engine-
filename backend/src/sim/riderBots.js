@@ -19,6 +19,12 @@ import {
 const RIDER_SPEED_METRES_PER_SECOND = RIDER_SPEED_KMH / 3.6;
 
 let botTimer = null;
+let lastTickMs = null;
+
+/** How long the last rider-bot tick took, in ms (shown on /api/health). */
+export function getRiderBotTickMs() {
+  return lastTickMs;
+}
 
 export function startRiderBots() {
   if (botTimer) return;
@@ -31,6 +37,12 @@ export function stopRiderBots() {
 }
 
 function moveAllRiders() {
+  const startedAt = performance.now();
+  moveEachRider();
+  lastTickMs = Math.round((performance.now() - startedAt) * 10) / 10;
+}
+
+function moveEachRider() {
   const now = Date.now();
   for (const task of getRiderTasks()) {
     if (task.status === 'WAITING') {

@@ -11,6 +11,9 @@ import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
 import OrderEvent from '../models/OrderEvent.js';
 import Lease from '../models/Lease.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 
 import mongoose from 'mongoose';
 
@@ -19,6 +22,22 @@ const ACTIVE_ORDER_STATUSES = ['ASSIGNED', 'PICKED_UP'];
 /** True while the database connection is up. The engine makes no decision it cannot save. */
 export function isDatabaseAvailable() {
   return mongoose.connection.readyState === 1;
+}
+
+const PING_TIMEOUT_MS = 2000;
+
+/** Round-trip time of a database ping in ms, or null if it failed or took over 2 s. */
+export async function pingDatabase() {
+  const startedAt = performance.now();
+  try {
+    await Promise.race([
+      mongoose.connection.db.admin().ping(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), PING_TIMEOUT_MS)),
+    ]);
+    return Math.round(performance.now() - startedAt);
+  } catch {
+    return null;
+  }
 }
 
 // ─── Startup reads ───────────────────────────────────────────────────────────
@@ -135,7 +154,7 @@ export function saveFinalPositions(riderEntries) {
  */
 export function appendOrderEvent(orderId, type, { riderId = null, details } = {}) {
   return OrderEvent.create({ orderId, type, riderId, details, at: new Date() })
-    .catch(err => console.error(`[engine] order event '${type}' write failed:`, err.message));
+    .catch(err => log.error('order event write failed', { orderId, type, error: err.message }));
 }
 
 // ─── Leader lease ────────────────────────────────────────────────────────────

@@ -9,6 +9,9 @@ import { _beginLegToHead, _fetchHeadRoute } from './riderLifecycle.js';
 import {
   loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders, appendOrderEvent,
 } from './storage.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 
 // ─── Hydration ───────────────────────────────────────────────────────────────
 // Rebuilds the engine's memory from the database. The orders are the source of truth for who
@@ -85,12 +88,12 @@ export async function hydrate() {
   if (ownerlessOrderIds.length) {
     await requeueOrders(ownerlessOrderIds, now);
     for (const orderId of ownerlessOrderIds) appendOrderEvent(orderId, 'requeued', { details: { reason: 'rider_missing' } });
-    console.warn(`[engine] re-queued ${ownerlessOrderIds.length} order(s) whose rider no longer exists`);
+    log.warn('re-queued orders whose rider no longer exists', { orderIds: ownerlessOrderIds });
   }
 
   for (const ord of await loadPendingOrders()) pendingQueue.set(ord._id.toString(), ord);
 
-  console.log(`[engine] hydrated — ${riderState.size} riders, ${pendingQueue.size} pending orders`);
+  log.info('hydrated from the database', { riders: riderState.size, pendingOrders: pendingQueue.size });
 }
 
 // Restore the rider's saved leg if it still leads to their first stop, and place them where the

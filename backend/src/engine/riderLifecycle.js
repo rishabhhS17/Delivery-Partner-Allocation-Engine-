@@ -4,6 +4,9 @@ import { getH3Config } from '../config/constants.js';
 import { riderState, activeRoutes } from './state.js';
 import { _syncIndex } from './h3Index.js';
 import { publish } from './broadcast.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 import {
   savePickup, saveDelivery, saveOrderRoute, saveRiderState, saveRiderLegRoute, appendOrderEvent,
 } from './storage.js';
@@ -45,7 +48,7 @@ export async function _completePickup(riderId, rider, now) {
   try {
     await savePickup(head.orderId, now, actualWait_s);
   } catch (err) {
-    console.error('[engine] pickup write failed, rider will report again:', err.message);
+    log.error('pickup write failed, rider will report again', { orderId: oid, riderId, error: err.message });
     return;
   }
 
@@ -67,7 +70,7 @@ async function _completeDrop(riderId, rider, now) {
   try {
     await saveDelivery(head.orderId, now);
   } catch (err) {
-    console.error('[engine] delivery write failed, rider will report again:', err.message);
+    log.error('delivery write failed, rider will report again', { orderId: oid, riderId, error: err.message });
     return;
   }
 
@@ -115,7 +118,7 @@ export function _beginLegToHead(rider, now, riderId) {
       targetType:    head.type,
       coords:        rider.legCoords,
     },
-  }).catch(err => console.error('[engine] leg write failed:', err.message));
+  }).catch(err => log.error('leg write failed', { riderId, error: err.message }));
   _fetchHeadRoute(rider, riderId);
 }
 
@@ -141,7 +144,7 @@ function _goIdle(rider, now, riderId) {
     h3Index:         rider.h3Index,
     deliveryTimestamps: rider.deliveryTimestamps,
     currentLeg:      null,
-  }).catch(err => console.error('[engine] idle write failed:', err.message));
+  }).catch(err => log.error('idle write failed', { riderId, error: err.message }));
 }
 
 // Fetch the road-snapped route for the current head leg (leg origin → stops[0]) and prefetch the
@@ -177,5 +180,5 @@ export function _fetchHeadRoute(rider, riderId) {
     });
     saveOrderRoute(head.orderId, route, Boolean(next)).catch(() => {});
     saveRiderLegRoute(riderId, route.leg1Coords).catch(() => {});
-  }).catch(err => console.warn('[engine] head route fetch failed, using straight-line fallback:', err.message));
+  }).catch(err => log.warn('route fetch failed, using straight-line fallback', { orderId: orderIdStr, riderId, error: err.message }));
 }

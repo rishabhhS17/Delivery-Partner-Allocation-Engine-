@@ -1,6 +1,9 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { tryAcquireLease, releaseLease } from './storage.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('lease');
 
 // ─── Leader lease ────────────────────────────────────────────────────────────
 // During a deploy Render briefly runs the old and new instance side by side. Only the instance
@@ -32,28 +35,28 @@ export function startLeaderElection({ onElected, onDeposed }) {
     } catch (err) {
       // Database unreachable: a leader keeps leading until its lease could have expired, which
       // the engine already handles by pausing dispatch (decision E3).
-      console.warn('[lease] check failed:', err.message);
+      log.warn('lease check failed', { instanceId, error: err.message });
       isHeld = isLeader;
     }
     try {
       if (isHeld && !isLeader) {
         isLeader = true;
-        console.log(`[lease] ${instanceId} is now the dispatcher`);
+        log.info('this instance is now the dispatcher', { instanceId });
         try {
           await onElected();
         } catch (err) {
           // Could not start (e.g. the database dropped mid-startup): give the lease back and
           // try again on the next check.
-          console.error('[lease] starting as dispatcher failed:', err.message);
+          log.error('starting as dispatcher failed', { instanceId, error: err.message });
           isLeader = false;
           await releaseLease(DISPATCHER_LEASE, instanceId).catch(() => {});
         }
       } else if (!isHeld && isLeader) {
         isLeader = false;
-        console.warn(`[lease] ${instanceId} lost the dispatcher lease`);
+        log.warn('lost the dispatcher lease', { instanceId });
         await onDeposed();
       } else if (!isHeld && leaseTimer === null) {
-        console.log(`[lease] ${instanceId} waiting — another instance is dispatching`);
+        log.info('waiting, another instance is dispatching', { instanceId });
       }
     } finally {
       leaseTimer = setTimeout(checkLease, LEASE_CHECK_EVERY_MS);
@@ -69,5 +72,5 @@ export async function resignLeadership() {
   if (!isLeader) return;
   isLeader = false;
   await releaseLease(DISPATCHER_LEASE, instanceId);
-  console.log(`[lease] ${instanceId} released the dispatcher lease`);
+  log.info('released the dispatcher lease', { instanceId });
 }

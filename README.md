@@ -216,7 +216,7 @@ All routes are prefixed with `/api`. Everything except `/auth` and `/health` req
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `GET` | `/health` | Liveness check |
+| `GET` | `/health` | Engine health: event-loop delay, dispatch/broadcast/rider-bot tick times, queue sizes, time to assign, DB ping (no login needed) |
 | `POST` | `/auth/register` · `/auth/login` | Auth (+ `/auth/google` OAuth flow) |
 | `GET` | `/analytics` | Dashboard metrics |
 | `POST` `GET` | `/riders` | Create / list riders |

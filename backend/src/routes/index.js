@@ -1,5 +1,7 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
+import { getHealth } from '../engine/index.js';
+import { getRiderBotTickMs } from '../sim/index.js';
 import authRoutes        from './auth.js';
 import analyticsRoutes   from './analytics.js';
 import riderRoutes       from './riders.js';
@@ -13,7 +15,15 @@ import streamRoutes      from './stream.js';
 
 const router = express.Router();
 
-router.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+// Open (no login) so the platform's health check can use it. Engine numbers are null on an
+// instance that is not the dispatcher (see the leader lease).
+router.get('/health', async (req, res, next) => {
+  try {
+    res.json({ status: 'ok', engine: await getHealth(), lastRiderBotTickMs: getRiderBotTickMs() });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.use('/auth',        authRoutes);
 router.use('/analytics',   protect, analyticsRoutes);

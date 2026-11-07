@@ -2,6 +2,10 @@ import { TICK_INTERVAL_MS } from '../config/constants.js';
 import { pendingQueue, runtime } from './state.js';
 import { publish, buildFleetSnapshot } from './broadcast.js';
 import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
+import { recordDispatchRoundMs, recordBroadcastMs } from './health.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 
 // How often the dispatcher looks for PENDING orders it has not heard about — ones created
 // through another instance during a deploy, or by a script.
@@ -29,7 +33,9 @@ export function startDispatchLoop() {
   const scheduleNextRound = () => {
     if (!runtime.running) return;
     runtime.dispatchTimer = setTimeout(() => {
+      const startedAt = performance.now();
       runExclusive(runDispatchRound)
+        .then(() => recordDispatchRoundMs(performance.now() - startedAt))
         .then(scheduleNextRound)
         // An error not tied to one order means the engine's own state can't be trusted: rethrow
         // so the process exits and Render restarts it from the database (decision E1).
@@ -48,7 +54,7 @@ export function startPendingOrderSync() {
         // A stale read is harmless: the assignment's conditional save refuses a changed order.
         if (!pendingQueue.has(orderId)) pendingQueue.set(orderId, order);
       }
-    }).catch(err => console.error('[engine] pending order sync failed:', err.message));
+    }).catch(err => log.error('pending order sync failed', { error: err.message }));
   }, PENDING_SYNC_EVERY_MS);
 }
 
@@ -67,14 +73,14 @@ async function runDispatchRound() {
   if (!isDatabaseAvailable()) {
     if (!runtime.isDispatchPaused) {
       runtime.isDispatchPaused = true;
-      console.warn('[engine] database unavailable — dispatch paused');
+      log.warn('database unavailable, dispatch paused');
       publish('simulation:status', { running: runtime.running, dispatchPaused: true });
     }
     return;
   }
   if (runtime.isDispatchPaused) {
     runtime.isDispatchPaused = false;
-    console.log('[engine] database back — dispatch resumed');
+    log.info('database back, dispatch resumed');
     publish('simulation:status', { running: runtime.running, dispatchPaused: false });
   }
 
@@ -101,6 +107,8 @@ async function runDispatchRound() {
 
 export function startBroadcastLoop() {
   runtime.broadcastTimer = setInterval(() => {
+    const startedAt = performance.now();
     publish('simulation:tick', { riders: buildFleetSnapshot(), queueDepth: pendingQueue.size });
+    recordBroadcastMs(performance.now() - startedAt);
   }, TICK_INTERVAL_MS);
 }

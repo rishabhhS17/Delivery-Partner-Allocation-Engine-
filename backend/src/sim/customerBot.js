@@ -4,6 +4,9 @@
 
 import { AUTO_ORDER_INTERVAL_MS } from '../config/constants.js';
 import { placeOrder } from '../engine/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('bots');
 
 let orderTimer = null;
 
@@ -13,7 +16,7 @@ export function startCustomerBot() {
     try {
       await placeOrder();
     } catch (err) {
-      console.error('[customerBot] auto order creation failed:', { error: err.message });
+      log.error('auto order creation failed', { error: err.message });
     }
   }, AUTO_ORDER_INTERVAL_MS);
 }

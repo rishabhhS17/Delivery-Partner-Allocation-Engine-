@@ -47,3 +47,6 @@ export const setH3  = (body) => api.put('/config/h3', body);
 
 // Analytics
 export const getAnalytics = (opts = {}) => api.get('/analytics', opts);
+
+// Engine health (event-loop delay, tick times, queues, DB latency)
+export const getHealth = () => api.get('/health');

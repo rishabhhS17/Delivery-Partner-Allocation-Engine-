@@ -18,6 +18,10 @@ import { saveAssignment, saveAllocationRecord, saveCancellation, appendOrderEven
 import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
 import { publish } from './broadcast.js';
+import { recordTimeToAssignMs } from './health.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 
 // Drop orders that waited too long AFTER becoming dispatchable (TTL fix).
 // Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.
@@ -34,14 +38,14 @@ export async function _cancelExpiredOrders(now) {
     try {
       isCancelled = await saveCancellation(order._id, now, 'no_rider');
     } catch (err) {
-      console.error('[engine] TTL cancel write failed, will retry:', err.message);
+      log.error('TTL cancel write failed, will retry', { orderId, error: err.message });
       continue;
     }
     pendingQueue.delete(orderId);
     if (!isCancelled) continue; // the order had already changed (assigned or cancelled elsewhere)
     appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
     publish('order:cancelled', { orderId, reason: 'no_rider' });
-    console.warn('[engine] order TTL expired → CANCELLED', orderId);
+    log.warn('order TTL expired, cancelled', { orderId, reason: 'no_rider' });
   }
 }
 
@@ -49,12 +53,12 @@ export async function _cancelExpiredOrders(now) {
 // retried: retrying would throw again every round (and after a restart), so one bad order could
 // otherwise stall dispatch for the whole city (decision E5, amended 2026-11-07).
 export async function _cancelOrderAfterEngineError(orderId, order, err) {
-  console.error('[engine] dispatch failed for order', orderId, '— cancelling it:', err);
+  log.error('dispatch failed for this order, cancelling it', { orderId, reason: 'engine_error', error: err });
   pendingQueue.delete(orderId);
   try {
     if (!(await saveCancellation(order._id, Date.now(), 'engine_error'))) return;
   } catch (saveErr) {
-    console.error('[engine] could not save the engine_error cancellation:', saveErr.message);
+    log.error('could not save the engine_error cancellation', { orderId, error: saveErr.message });
     return; // the order is still PENDING in the database and will be retried after a restart
   }
   appendOrderEvent(order._id, 'cancelled', { details: { reason: 'engine_error', error: String(err?.message ?? err) } });
@@ -148,22 +152,23 @@ export async function _commitAssignment({ orderId, order, winnerId, result }) {
   try {
     isSaved = await saveAssignment(order._id, result.winner.rider._id, result.score, now);
   } catch (err) {
-    console.error('[engine] assignment write failed, order stays queued:', err.message);
+    log.error('assignment write failed, order stays queued', { orderId, riderId: winnerId, error: err.message });
     return null;
   }
   if (!isSaved) {
     // Someone else changed the order (cancelled, or assigned elsewhere) — it is no longer ours.
     pendingQueue.delete(orderId);
-    console.warn('[engine] order was no longer PENDING at save time, dropped from queue', orderId);
+    log.warn('order was no longer PENDING at save time, dropped from queue', { orderId });
     return null;
   }
   pendingQueue.delete(orderId);
+  if (order.createdAt) recordTimeToAssignMs(now - new Date(order.createdAt).getTime());
   appendOrderEvent(order._id, 'assigned', {
     riderId: result.winner.rider._id,
     details: { score: result.score, candidatesConsidered: result.candidatesConsidered },
   });
   saveAllocationRecord(order._id, result.winner.rider._id, result)
-    .catch(err => console.error('[engine] allocation history write failed:', err.message));
+    .catch(err => log.error('allocation history write failed', { orderId, error: err.message }));
 
   const winner = riderState.get(winnerId);
 

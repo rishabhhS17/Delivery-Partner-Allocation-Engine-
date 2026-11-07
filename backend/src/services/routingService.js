@@ -1,4 +1,7 @@
 import { config } from '../config/env.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('routing');
 
 const MAPBOX_BASE = 'https://api.mapbox.com/directions/v5/mapbox/driving';
 const MAX_CONCURRENT = 3;
@@ -39,7 +42,7 @@ function _pruneRouteCache() {
 function _logCacheStats() {
   const total = _cacheHits + _cacheMisses;
   if (total > 0 && total % 20 === 0) {
-    console.log(`[routing] route cache: ${_cacheHits}/${total} hits (${Math.round((_cacheHits / total) * 100)}%), ${_routeCache.size} cached entries`);
+    log.info('route cache stats', { hits: _cacheHits, lookups: total, cachedEntries: _routeCache.size });
   }
 }
 
@@ -83,7 +86,7 @@ async function _callMapbox(riderCoords, restaurantCoords, customerCoords) {
       leg2Duration_s: Math.round(leg2.duration),
     };
   } catch (err) {
-    console.warn('[routing] getRoute failed:', {
+    log.warn('getRoute failed', {
       rider:      riderCoords,
       restaurant: restaurantCoords,
       customer:   customerCoords,

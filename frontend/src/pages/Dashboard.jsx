@@ -9,6 +9,7 @@ import MapPanel from '../components/common/MapPanel';
 import EmptyState from '../components/common/EmptyState';
 import LiveDot from '../components/common/LiveDot';
 import ProgressRing from '../components/common/ProgressRing';
+import EngineHealthCard from '../components/common/EngineHealthCard';
 import { getAnalytics } from '../api/endpoints';
 import { useSimulation } from '../context/SimulationContext';
 import styles from './Dashboard.module.css';
@@ -225,6 +226,8 @@ export default function Dashboard() {
           )}
         </Card>
       </Box>
+
+      <EngineHealthCard />
     </Box>
   );
 }

@@ -15,11 +15,15 @@ import {
   runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
 } from './dispatchLoop.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
+import { getEngineHealth } from './health.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
 import { saveFinalPositions, appendOrderEvent } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('engine');
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -56,7 +60,7 @@ export async function startEngine() {
   startBroadcastLoop();
   startPendingOrderSync();
   publish('simulation:status', { running: true });
-  console.log('[engine] started');
+  log.info('engine started');
 }
 
 /**
@@ -68,7 +72,7 @@ export async function stopEngine() {
   runtime.running = false;
   stopLoops();
   await runExclusive(() => saveFinalPositions([...riderState.entries()]));
-  console.log(`[engine] stopped — saved ${riderState.size} rider positions`);
+  log.info('engine stopped, final rider positions saved', { riders: riderState.size });
 }
 
 // ─── Live feed ───────────────────────────────────────────────────────────────
@@ -89,6 +93,11 @@ export function getLiveSnapshot() {
  */
 export function subscribeToLiveFeed(send) {
   return subscribe(send);
+}
+
+/** Health numbers for GET /api/health: event-loop delay, tick times, queues, DB latency. */
+export async function getHealth() {
+  return { isLeader: isThisInstanceLeader(), ...(await getEngineHealth()) };
 }
 
 /** @returns {{ running: boolean, isLeader: boolean, riderCount: number, queueDepth: number }} */

@@ -4,6 +4,9 @@ import Restaurant from '../models/Restaurant.js';
 import Customer from '../models/Customer.js';
 import Order from '../models/Order.js';
 import { buildOrderTimingFields } from '../utils/orderTiming.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('orders');
 
 async function pickPair() {
   const restaurants = await Restaurant.find({ isActive: true });
@@ -73,7 +76,7 @@ export async function bulkCreateOrders(count) {
       created.push(order);
     } catch (err) {
       // skip — no eligible customer found for this attempt
-      console.error('[orderGen] bulk order creation failed:', { attempt: i, error: err.message });
+      log.error('bulk order creation failed', { attempt: i, error: err.message });
     }
   }
   return created;
