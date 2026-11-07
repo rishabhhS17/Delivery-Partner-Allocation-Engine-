@@ -15,6 +15,7 @@ import {
   runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
 } from './dispatchLoop.js';
 import { _makeOffer, _acceptOffer, _rejectOffer, _withdrawOffer } from './offers.js';
+import { _listKitchenTickets, _updatePrepEstimate } from './prepEstimates.js';
 import { _applyRiderAvailability } from './riderLifecycle.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
@@ -185,6 +186,24 @@ export function dispatchNow(orderId) {
     // The save may have found the order already changed and dropped it from the queue.
     return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };
   });
+}
+
+// ─── Kitchen (what a restaurant's tablet would send) ─────────────────────────
+
+/**
+ * Orders the kitchens are still preparing (not yet picked up).
+ * @returns {{ orderId: string, placedAt: Date, foodReadyAt: Date, riderId: string|null }[]}
+ */
+export function getKitchenTickets() {
+  return _listKitchenTickets();
+}
+
+/**
+ * The kitchen's new estimate of when the food is ready; dispatch re-plans (decision H1).
+ * @returns {Promise<'updated'|'not_found'|'failed'>}
+ */
+export function updatePrepEstimate(orderId, foodReadyAt) {
+  return runExclusive(() => _updatePrepEstimate(String(orderId), foodReadyAt));
 }
 
 // ─── Rider availability ──────────────────────────────────────────────────────

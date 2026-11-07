@@ -10,6 +10,7 @@ export function _meta(order) {
     prepReadyAt:   order.prepReadyAt,   promisedBy:    order.promisedBy,
     jitGrace_s:    order.jitGrace_s ?? 0,
     riderArrivedAt: order.riderArrivedAt ?? null,
+    createdAt:     order.createdAt,
     pickedUp:      order.status === 'PICKED_UP',
   };
 }

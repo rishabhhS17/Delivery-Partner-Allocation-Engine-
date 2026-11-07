@@ -146,6 +146,18 @@ export function loadOrder(orderId) {
   return Order.findById(orderId);
 }
 
+/**
+ * The kitchen's new food-ready estimate; only for an order not yet picked up.
+ * @returns {Promise<boolean>} true when saved, false when the order is past pickup.
+ */
+export async function savePrepEstimate(orderId, foodReadyAt) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: { $in: ['PENDING', 'ASSIGNED'] } },
+    { $set: { prepReadyAt: foodReadyAt } }
+  );
+  return modifiedCount === 1;
+}
+
 /** First dispatch attempt only: a later one (or one after a restart) keeps the original time. */
 export function saveDispatchStarted(orderId, now) {
   return Order.updateOne({ _id: orderId, dispatchStartedAt: null }, { $set: { dispatchStartedAt: new Date(now) } });

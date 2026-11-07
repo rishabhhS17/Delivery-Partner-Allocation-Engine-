@@ -45,6 +45,11 @@ export function countScoring(orderId) {
   return timesScored;
 }
 
+/** True while the order sleeps in the list (false while it is offered to a rider). */
+export function isOrderAsleep(orderId) {
+  return wakeAtByOrder.has(orderId);
+}
+
 /** Keep the order queued but asleep with no wake-up time (it has an open offer). */
 export function unscheduleWake(orderId) {
   wakeAtByOrder.delete(orderId);
