@@ -13,6 +13,7 @@ import { _chooseAssignment, _commitAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
 import { runExclusive, startDispatchLoop, startBroadcastLoop, stopLoops } from './dispatchLoop.js';
 import { saveFinalPositions, appendOrderEvent } from './storage.js';
+import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 
 /**
  * What a rider bot needs to move one rider for one tick.
@@ -61,7 +62,7 @@ export async function startEngine() {
   runtime.running = true;
   startDispatchLoop();
   startBroadcastLoop();
-  if (runtime.io) runtime.io.emit('simulation:status', { running: true });
+  publish('simulation:status', { running: true });
   console.log('[engine] started');
 }
 
@@ -75,6 +76,26 @@ export async function stopEngine() {
   stopLoops();
   await runExclusive(() => saveFinalPositions([...riderState.entries()]));
   console.log(`[engine] stopped — saved ${riderState.size} rider positions`);
+}
+
+// ─── Live feed ───────────────────────────────────────────────────────────────
+
+/**
+ * Everything a browser needs to draw the current state from scratch: the fleet, queue depth,
+ * active route lines and recent assignments. Sent first on every (re)connection.
+ */
+export function getLiveSnapshot() {
+  return buildLiveSnapshot();
+}
+
+/**
+ * Receive every live event (the fleet each second, order events as they happen) until the
+ * returned function is called. `send` gets the event name and its payload as a JSON string.
+ * @param {(event: string, json: string) => void} send
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeToLiveFeed(send) {
+  return subscribe(send);
 }
 
 /** @returns {{ running: boolean, riderCount: number, queueDepth: number }} */

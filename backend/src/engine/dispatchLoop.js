@@ -1,5 +1,6 @@
 import { TICK_INTERVAL_MS } from '../config/constants.js';
-import { riderState, pendingQueue, runtime } from './state.js';
+import { pendingQueue, runtime } from './state.js';
+import { publish, buildFleetSnapshot } from './broadcast.js';
 import { _cancelExpiredOrders, _chooseAssignment, _commitAssignment } from './dispatch.js';
 
 // ─── Dispatch loop ───────────────────────────────────────────────────────────
@@ -49,37 +50,11 @@ async function runDispatchRound() {
 }
 
 // ─── Broadcast loop ──────────────────────────────────────────────────────────
-// Sends the fleet every second, independent of dispatch, so the map keeps moving even while a
-// dispatch round is waiting on the database.
+// Sends the whole fleet every second (decision C3), independent of dispatch, so the map keeps
+// moving even while a dispatch round is waiting on the database.
 
 export function startBroadcastLoop() {
   runtime.broadcastTimer = setInterval(() => {
-    if (!runtime.io) return;
-    runtime.io.emit('simulation:tick', {
-      riders:     buildFleetSnapshot(),
-      queueDepth: pendingQueue.size,
-    });
+    publish('simulation:tick', { riders: buildFleetSnapshot(), queueDepth: pendingQueue.size });
   }, TICK_INTERVAL_MS);
-}
-
-function buildFleetSnapshot() {
-  const fleet = [];
-  for (const [riderId, rider] of riderState) {
-    fleet.push({
-      _id:                riderId,
-      name:               rider.name,
-      lat:                rider.lat,
-      lng:                rider.lng,
-      status:             rider.status,
-      availabilityStatus: rider.availabilityStatus ?? 'ONLINE',
-      orderId:            rider.currentOrderId ? rider.currentOrderId.toString() : null,
-      carrying:           rider.orders.size,
-      onboardOrderIds:    [...rider.orders.keys()],
-      legStepIndex:       rider.currentSegmentIdx ?? 0,
-      leg:                rider.status === 'ACCEPTED' ? 'leg1'
-                        : rider.status === 'PICKED_UP' ? 'leg2'
-                        : null,
-    });
-  }
-  return fleet;
 }

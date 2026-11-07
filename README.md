@@ -230,6 +230,7 @@ All routes are prefixed with `/api`. Everything except `/auth` and `/health` req
 | `GET` | `/allocation/history` | Paginated allocation audit trail |
 | `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
 | `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
+| `GET` | `/stream` | Live feed (Server-Sent Events): a snapshot, then the fleet every second and each order event |
 
 ### WebSocket events (server → client)
 `simulation:status` · `simulation:tick` (rider positions + queue depth) · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled` · `recent:assignments`

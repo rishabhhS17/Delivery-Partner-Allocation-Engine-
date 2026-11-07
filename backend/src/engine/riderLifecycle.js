@@ -1,8 +1,9 @@
 import { latLngToCell } from 'h3-js';
 import { getRoute } from '../services/routingService.js';
 import { getH3Config } from '../config/constants.js';
-import { riderState, activeRoutes, runtime } from './state.js';
+import { riderState, activeRoutes } from './state.js';
 import { _syncIndex } from './h3Index.js';
+import { publish } from './broadcast.js';
 import {
   savePickup, saveDelivery, saveOrderRoute, saveRiderState, saveRiderLegRoute, appendOrderEvent,
 } from './storage.js';
@@ -47,7 +48,7 @@ export function _completePickup(riderId, rider, now) {
   savePickup(head.orderId, now, actualWait_s)
     .catch(err => console.error('[engine] pickup write failed:', err.message));
   appendOrderEvent(head.orderId, 'picked_up', { riderId: rider._id, details: { actualWait_s } });
-  if (runtime.io) runtime.io.emit('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
+  publish('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
 
   _beginLegToHead(rider, now, riderId);
 }
@@ -62,7 +63,7 @@ function _completeDrop(riderId, rider, now) {
   saveDelivery(head.orderId, now)
     .catch(err => console.error('[engine] delivered write failed:', err.message));
   appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
-  if (runtime.io) runtime.io.emit('order:delivered', { orderId: oid, riderId: riderId.toString() });
+  publish('order:delivered', { orderId: oid, riderId: riderId.toString() });
 
   _syncIndex(riderId, rider);   // a slot just freed → ensure indexed
   _beginLegToHead(rider, now, riderId);
@@ -154,14 +155,12 @@ export function _fetchHeadRoute(rider, riderId) {
       leg1Coords: route.leg1Coords,
       leg2Coords: next ? route.leg2Coords : [],
     });
-    if (runtime.io) {
-      runtime.io.emit('order:route', {
-        orderId: orderIdStr,
-        riderId: riderId.toString(),
-        leg1Coords: route.leg1Coords,
-        leg2Coords: next ? route.leg2Coords : [],
-      });
-    }
+    publish('order:route', {
+      orderId: orderIdStr,
+      riderId: riderId.toString(),
+      leg1Coords: route.leg1Coords,
+      leg2Coords: next ? route.leg2Coords : [],
+    });
     saveOrderRoute(head.orderId, route, Boolean(next)).catch(() => {});
     saveRiderLegRoute(riderId, route.leg1Coords).catch(() => {});
   }).catch(err => console.warn('[engine] head route fetch failed, using straight-line fallback:', err.message));

@@ -9,6 +9,7 @@ import orderRoutes       from './orders.js';
 import allocationRoutes  from './allocation.js';
 import configRoutes      from './config.js';
 import simulationRoutes  from './simulation.js';
+import streamRoutes      from './stream.js';
 
 const router = express.Router();
 
@@ -23,5 +24,6 @@ router.use('/orders',      protect, orderRoutes);
 router.use('/allocation',  protect, allocationRoutes);
 router.use('/config',      protect, configRoutes);
 router.use('/simulation',  protect, simulationRoutes);
+router.use('/stream',      protect, streamRoutes);
 
 export default router;

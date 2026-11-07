@@ -12,11 +12,12 @@ import {
   AGING_LOCK_S,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
-import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP, runtime } from './state.js';
+import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP } from './state.js';
 import { _meta } from './itinerary.js';
 import { saveAssignment, saveAllocationRecord, saveCancellation, appendOrderEvent } from './storage.js';
 import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
+import { publish } from './broadcast.js';
 
 // Drop orders that waited too long AFTER becoming dispatchable (TTL fix).
 // Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.
@@ -37,7 +38,7 @@ export async function _cancelExpiredOrders(now) {
     }
     pendingQueue.delete(orderId);
     appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
-    if (runtime.io) runtime.io.emit('order:cancelled', { orderId, reason: 'no_rider' });
+    publish('order:cancelled', { orderId, reason: 'no_rider' });
     console.warn('[engine] order TTL expired → CANCELLED', orderId);
   }
 }
@@ -169,7 +170,7 @@ export async function _commitAssignment({ orderId, order, winnerId, result }) {
     carrying:       winner.orders.size,
     ts:             now,
   };
-  if (runtime.io) runtime.io.emit('order:assigned', payload);
+  publish('order:assigned', payload);
   recentAssignments.push(payload);
   if (recentAssignments.length > RECENT_CAP) recentAssignments.shift();
 
