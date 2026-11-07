@@ -68,7 +68,7 @@ export const getAllOrders = async (req, res, next) => {
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('-polyline -leg1Coords -leg2Coords')  // table doesn't use them; map gets them live over the socket
+      .select('-polyline -leg1Coords -leg2Coords')  // table doesn't use them; map gets them from the live stream
       .populate('assignedRiderId', 'name')
       .lean();
     res.json({ success: true, data: orders });

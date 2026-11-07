@@ -40,7 +40,7 @@ const labelLayer = makeLabelLayer({
   minZoom:   13,
 });
 
-// Normalize any entity to { id, type, name, lng, lat }. Riders from the live socket carry
+// Normalize any entity to { id, type, name, lng, lat }. Riders from the live stream carry
 // lat/lng; restaurants/customers from REST carry latitude/longitude.
 const toPoint = (e, type) => ({
   id:   String(e._id),
@@ -74,7 +74,7 @@ export default function EntityMap() {
     getRiders().then((r) => setFetchedRiders(r.data ?? [])).catch(() => {});
   }, []);
 
-  // Prefer live socket riders; fall back to the one-time fetch when the sim hasn't ticked yet.
+  // Prefer live-stream riders; fall back to the one-time fetch when the sim hasn't ticked yet.
   const riders = liveRiders?.length ? liveRiders : fetchedRiders;
 
   const points = useMemo(() => [

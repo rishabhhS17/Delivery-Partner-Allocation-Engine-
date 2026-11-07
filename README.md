@@ -16,7 +16,7 @@ The core is a **deterministic, rule-based allocation engine**: it geo-shortlists
 | **ETAR scoring** | Ranks by *estimated time to availability + travel*, not raw distance — a near-but-busy rider isn't actually faster |
 | **Live Simulation** | ~32 simulated riders animate across a Ranchi map; new orders auto-generate every 10 minutes |
 | **Road-snapped Routing** | Two-leg journeys (rider→restaurant→customer) follow real driving routes via the Mapbox Directions API, with a straight-line fallback |
-| **Real-time Map** | Rider markers color-coded by state, restaurant pins, live route lines, positions streamed over WebSockets (server is the single source of truth) |
+| **Real-time Map** | Rider markers color-coded by state, restaurant pins, live route lines, positions streamed over Server-Sent Events (server is the single source of truth) |
 | **Explainable Decisions** | Every assignment records a per-factor score breakdown in an append-only allocation history |
 | **Order Queue + TTL** | Unserved orders queue and auto-assign when a rider frees up; orders that wait too long are dropped as `CANCELLED` |
 | **Batching-lite** | A busy rider can hold a queued next order and chain straight into it after delivering |
@@ -30,12 +30,12 @@ The core is a **deterministic, rule-based allocation engine**: it geo-shortlists
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                          Frontend                            │
-│   React 18 · Vite · Material UI · Mapbox GL · Socket.IO       │
+│   React 18 · Vite · Material UI · Mapbox GL                    │
 └─────────────────────────────┬────────────────────────────────┘
-                              │  REST + WebSocket (JWT-authed)
+                              │  REST + SSE stream (JWT-authed)
 ┌─────────────────────────────▼────────────────────────────────┐
 │                          Backend                             │
-│   Node.js · Express · Socket.IO · Mongoose · h3-js           │
+│   Node.js · Express · Mongoose · h3-js                       │
 │                                                              │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────┐ │
 │  │ Allocation  │  │ Simulation  │  │   Order     │  │ Route│ │
@@ -134,12 +134,12 @@ Each **1-second tick**, riders advance along their road-snapped polyline at `RID
 - **React 18** + **Vite** — UI and build tooling
 - **Material UI** — component library & styling
 - **Mapbox GL** (`react-map-gl`) — map rendering, markers, route lines
-- **Socket.IO Client** — real-time position/state stream
+- **Fetch stream reader** — reads the Server-Sent Events live feed with the JWT in the header
 - **Axios** · **React Router v6**
 
 ### Backend
 - **Node.js** + **Express** — REST API
-- **Socket.IO** — WebSocket streaming (JWT-authenticated handshake)
+- **Server-Sent Events** — one-way live feed at `GET /api/stream` (JWT-authenticated)
 - **Mongoose** — MongoDB ODM
 - **h3-js** — H3 hexagonal spatial index (candidate filtering, service areas)
 - **Mapbox Directions API** — road-snapped two-leg routing
@@ -201,7 +201,6 @@ cp .env.example .env
 Fill in `.env`:
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
-VITE_WS_URL=http://localhost:5000
 VITE_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
 ```
 Run:
@@ -232,8 +231,8 @@ All routes are prefixed with `/api`. Everything except `/auth` and `/health` req
 | `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
 | `GET` | `/stream` | Live feed (Server-Sent Events): a snapshot, then the fleet every second and each order event |
 
-### WebSocket events (server → client)
-`simulation:status` · `simulation:tick` (rider positions + queue depth) · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled` · `recent:assignments`
+### Live stream events (`GET /api/stream`, server → client)
+`snapshot` (sent first on every connection: fleet, queue depth, route lines, recent assignments) · `simulation:tick` (every rider, every second) · `simulation:status` · `order:assigned` · `order:route` · `order:status` · `order:delivered` · `order:cancelled`. A reconnecting browser gets a fresh `snapshot`; missed events are not replayed.
 
 ---
 
@@ -255,13 +254,13 @@ Delivery-Partner-Allocation-Engine-/
 │       ├── validators/      # request validation
 │       ├── tests/           # test suites
 │       ├── app.js           # Express app (CORS, helmet, rate limit)
-│       └── server.js        # HTTP + Socket.IO entry point
+│       └── server.js        # HTTP entry point, startup and graceful shutdown
 ├── frontend/
 │   └── src/
 │       ├── api/             # Axios layer + endpoints
 │       ├── components/      # common · map · navigation
 │       ├── config/          # navigation config
-│       ├── context/         # Auth + Simulation (socket) providers
+│       ├── context/         # Auth + Simulation (live stream) providers
 │       ├── layouts/         # app layout
 │       ├── pages/           # route-level pages (maps, dashboard, tables)
 │       ├── routes/          # route definitions + guards

@@ -15,7 +15,6 @@ export function subscribe(send) {
 }
 
 export function publish(event, payload) {
-  if (runtime.io) runtime.io.emit(event, payload);
   if (!subscribers.size) return;
   const json = JSON.stringify(payload); // serialised once, however many browsers are watching
   for (const send of subscribers) send(event, json);

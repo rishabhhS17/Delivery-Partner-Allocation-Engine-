@@ -6,7 +6,7 @@
 import { latLngToCell } from 'h3-js';
 import { getH3Config } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
-import { riderState, pendingQueue, activeRoutes, recentAssignments, runtime } from './state.js';
+import { riderState, pendingQueue, runtime } from './state.js';
 import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment, _commitAssignment } from './dispatch.js';
@@ -40,20 +40,6 @@ import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
  */
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
-
-/** Attach the Socket.IO server the engine broadcasts on. */
-export function initEngine(io) {
-  runtime.io = io;
-  io.on('connection', (socket) => {
-    socket.emit('simulation:status', { running: runtime.running });
-    for (const [orderId, route] of activeRoutes) {
-      socket.emit('order:route', { orderId, ...route });
-    }
-    if (recentAssignments.length) {
-      socket.emit('recent:assignments', recentAssignments);
-    }
-  });
-}
 
 /** Load state from the database and start dispatching and broadcasting. */
 export async function startEngine() {

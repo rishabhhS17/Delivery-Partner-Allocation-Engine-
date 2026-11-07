@@ -12,6 +12,5 @@ export const RECENT_CAP        = 20;
 export const runtime = {
   dispatchTimer:  null,
   broadcastTimer: null,
-  io:        null,
   running:   false,
 };
