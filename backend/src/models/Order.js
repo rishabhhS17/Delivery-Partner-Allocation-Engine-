@@ -24,6 +24,9 @@ const OrderSchema = new mongoose.Schema(
     prepReadyAt:  { type: Date },
     jitGrace_s:   { type: Number },
     actualWait_s: { type: Number },
+    // When the rider reached the restaurant. Saved (not just kept in memory) so the measured wait
+    // stays right across a restart — every engine timer is a saved timestamp (decision E1).
+    riderArrivedAt: { type: Date },
     promisedBy:   { type: Date },
 
     polyline: { type: [{ lat: Number, lng: Number }], default: [] },

@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('engine');
 import {
   savePickup, saveDelivery, saveOrderRoute, saveRiderState, saveRiderLegRoute, appendOrderEvent,
+  saveRiderArrivedAtRestaurant,
 } from './storage.js';
 
 // ─── Stop arrival / transitions ────────────────────────────────────────────────
@@ -30,8 +31,12 @@ export async function _arriveAtStop(riderId, rider, now) {
       // Food not ready — park and WAIT.
       rider.status          = 'WAITING';
       rider.waitingUntil    = readyMs;
-      rider.pickupArrivalAt = now;
+      // After a restart the rider "arrives" again; the saved first arrival keeps the wait right.
+      rider.pickupArrivalAt = meta?.riderArrivedAt ? new Date(meta.riderArrivedAt).getTime() : now;
+      if (meta && !meta.riderArrivedAt) meta.riderArrivedAt = new Date(now);
       saveRiderState(riderId, { status: 'WAITING' }).catch(() => {});
+      saveRiderArrivedAtRestaurant(head.orderId, now)
+        .catch(err => log.error('arrival time write failed', { orderId: head.orderId, riderId, error: err.message }));
       appendOrderEvent(head.orderId, 'rider_waiting', { riderId: rider._id, details: { foodReadyAt: new Date(readyMs) } });
     } else {
       await _completePickup(riderId, rider, now);
@@ -44,7 +49,11 @@ export async function _arriveAtStop(riderId, rider, now) {
 export async function _completePickup(riderId, rider, now) {
   const head = rider.stops[0];
   const oid  = head.orderId.toString();
-  const actualWait_s = rider.pickupArrivalAt ? Math.round((now - rider.pickupArrivalAt) / 1000) : 0;
+  const meta = rider.orders.get(oid);
+  // Measured from the first arrival, which is saved — so it stays right across a restart.
+  const savedArrivalMs = meta?.riderArrivedAt ? new Date(meta.riderArrivedAt).getTime() : null;
+  const arrivedAtMs = rider.pickupArrivalAt ?? savedArrivalMs;
+  const actualWait_s = arrivedAtMs ? Math.round((now - arrivedAtMs) / 1000) : 0;
   try {
     await savePickup(head.orderId, now, actualWait_s);
   } catch (err) {
@@ -53,7 +62,6 @@ export async function _completePickup(riderId, rider, now) {
   }
 
   rider.stops.splice(rider.stops.indexOf(head), 1); // remove this PICKUP
-  const meta = rider.orders.get(oid);
   if (meta) meta.pickedUp = true;
   rider.waitingUntil    = null;
   rider.pickupArrivalAt = null;

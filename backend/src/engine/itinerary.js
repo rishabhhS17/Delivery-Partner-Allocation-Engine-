@@ -9,6 +9,7 @@ export function _meta(order) {
     customerLat:   order.customerLat,   customerLng:   order.customerLng,
     prepReadyAt:   order.prepReadyAt,   promisedBy:    order.promisedBy,
     jitGrace_s:    order.jitGrace_s ?? 0,
+    riderArrivedAt: order.riderArrivedAt ?? null,
     pickedUp:      order.status === 'PICKED_UP',
   };
 }

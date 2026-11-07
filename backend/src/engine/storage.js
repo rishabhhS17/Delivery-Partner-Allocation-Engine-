@@ -97,6 +97,11 @@ export function saveAllocationRecord(orderId, riderId, result) {
   });
 }
 
+/** First arrival at the restaurant only: a repeat after a restart keeps the original time. */
+export function saveRiderArrivedAtRestaurant(orderId, now) {
+  return Order.updateOne({ _id: orderId, riderArrivedAt: null }, { $set: { riderArrivedAt: new Date(now) } });
+}
+
 export function savePickup(orderId, now, actualWait_s) {
   return Order.findByIdAndUpdate(orderId, {
     status: 'PICKED_UP', pickedUpAt: new Date(now), actualWait_s,
