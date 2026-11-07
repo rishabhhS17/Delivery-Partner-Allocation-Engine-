@@ -12,6 +12,7 @@ export const RECENT_CAP        = 20;
 export const runtime = {
   dispatchTimer:  null,
   broadcastTimer: null,
+  pendingSyncTimer: null,
   running:   false,
   isDispatchPaused: false,
 };

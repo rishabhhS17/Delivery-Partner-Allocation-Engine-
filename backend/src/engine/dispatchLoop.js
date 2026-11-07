@@ -1,7 +1,11 @@
 import { TICK_INTERVAL_MS } from '../config/constants.js';
 import { pendingQueue, runtime } from './state.js';
 import { publish, buildFleetSnapshot } from './broadcast.js';
-import { isDatabaseAvailable } from './storage.js';
+import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
+
+// How often the dispatcher looks for PENDING orders it has not heard about — ones created
+// through another instance during a deploy, or by a script.
+const PENDING_SYNC_EVERY_MS = 5_000;
 import { _cancelExpiredOrders, _chooseAssignment, _commitAssignment } from './dispatch.js';
 
 // ─── Dispatch loop ───────────────────────────────────────────────────────────
@@ -31,11 +35,26 @@ export function startDispatchLoop() {
   scheduleNextRound();
 }
 
+export function startPendingOrderSync() {
+  runtime.pendingSyncTimer = setInterval(() => {
+    if (!isDatabaseAvailable()) return;
+    runExclusive(async () => {
+      for (const order of await loadPendingOrders()) {
+        const orderId = order._id.toString();
+        // A stale read is harmless: the assignment's conditional save refuses a changed order.
+        if (!pendingQueue.has(orderId)) pendingQueue.set(orderId, order);
+      }
+    }).catch(err => console.error('[engine] pending order sync failed:', err.message));
+  }, PENDING_SYNC_EVERY_MS);
+}
+
 export function stopLoops() {
   clearTimeout(runtime.dispatchTimer);
   clearInterval(runtime.broadcastTimer);
+  clearInterval(runtime.pendingSyncTimer);
   runtime.dispatchTimer = null;
   runtime.broadcastTimer = null;
+  runtime.pendingSyncTimer = null;
 }
 
 async function runDispatchRound() {

@@ -11,7 +11,13 @@ import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment, _commitAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
-import { runExclusive, startDispatchLoop, startBroadcastLoop, stopLoops } from './dispatchLoop.js';
+import {
+  runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
+} from './dispatchLoop.js';
+import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
+
+// Only the instance holding the leader lease runs the engine (decision E4).
+export { startLeaderElection, resignLeadership };
 import { saveFinalPositions, appendOrderEvent } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 
@@ -48,6 +54,7 @@ export async function startEngine() {
   runtime.running = true;
   startDispatchLoop();
   startBroadcastLoop();
+  startPendingOrderSync();
   publish('simulation:status', { running: true });
   console.log('[engine] started');
 }
@@ -84,9 +91,12 @@ export function subscribeToLiveFeed(send) {
   return subscribe(send);
 }
 
-/** @returns {{ running: boolean, riderCount: number, queueDepth: number }} */
+/** @returns {{ running: boolean, isLeader: boolean, riderCount: number, queueDepth: number }} */
 export function getStatus() {
-  return { running: runtime.running, riderCount: riderState.size, queueDepth: pendingQueue.size };
+  return {
+    running: runtime.running, isLeader: isThisInstanceLeader(),
+    riderCount: riderState.size, queueDepth: pendingQueue.size,
+  };
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────

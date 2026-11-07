@@ -30,13 +30,15 @@ export async function _cancelExpiredOrders(now) {
       : ((order.queuedAt ?? order.createdAt)?.getTime?.() ?? now);
     if (dispatchableMs > ttlCutoff) continue;
 
+    let isCancelled;
     try {
-      await saveCancellation(order._id, now);
+      isCancelled = await saveCancellation(order._id, now);
     } catch (err) {
       console.error('[engine] TTL cancel write failed, will retry:', err.message);
       continue;
     }
     pendingQueue.delete(orderId);
+    if (!isCancelled) continue; // the order had already changed (assigned or cancelled elsewhere)
     appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
     publish('order:cancelled', { orderId, reason: 'no_rider' });
     console.warn('[engine] order TTL expired → CANCELLED', orderId);

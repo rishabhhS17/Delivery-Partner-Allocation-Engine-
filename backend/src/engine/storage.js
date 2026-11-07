@@ -10,6 +10,7 @@ import Rider from '../models/Rider.js';
 import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
 import OrderEvent from '../models/OrderEvent.js';
+import Lease from '../models/Lease.js';
 
 import mongoose from 'mongoose';
 
@@ -131,4 +132,29 @@ export function saveFinalPositions(riderEntries) {
 export function appendOrderEvent(orderId, type, { riderId = null, details } = {}) {
   return OrderEvent.create({ orderId, type, riderId, details, at: new Date() })
     .catch(err => console.error(`[engine] order event '${type}' write failed:`, err.message));
+}
+
+// ─── Leader lease ────────────────────────────────────────────────────────────
+
+/**
+ * Take or renew a lease. Succeeds when nobody holds it, it has expired, or we already hold it.
+ * @returns {Promise<boolean>} true when `holder` now holds the lease.
+ */
+export async function tryAcquireLease(leaseId, holder, durationMs) {
+  const now = new Date();
+  try {
+    const lease = await Lease.findOneAndUpdate(
+      { _id: leaseId, $or: [{ holder }, { expiresAt: { $lt: now } }] },
+      { $set: { holder, expiresAt: new Date(now.getTime() + durationMs) } },
+      { upsert: true, new: true }
+    );
+    return lease.holder === holder;
+  } catch (err) {
+    if (err.code === 11000) return false; // someone else holds a live lease
+    throw err;
+  }
+}
+
+export function releaseLease(leaseId, holder) {
+  return Lease.deleteOne({ _id: leaseId, holder });
 }

@@ -2,7 +2,7 @@ import { createServer } from 'http'; // Node's raw HTTP server
 import app from './app.js'; // the Express app: REST routes + the /api/stream live feed
 import connectDB from './config/db.js';
 import { config } from './config/env.js';
-import { startEngine, stopEngine } from './engine/index.js';
+import { startEngine, stopEngine, startLeaderElection, resignLeadership } from './engine/index.js';
 import { startBots, stopBots } from './sim/index.js';
 
 await connectDB();
@@ -20,8 +20,9 @@ const shutdown = async () => {
   stopBots();
   try {
     await stopEngine();
+    await resignLeadership(); // the waiting instance takes over on its next check
   } catch (err) {
-    console.error('[server] saving final positions failed:', err.message);
+    console.error('[server] clean shutdown failed:', err.message);
   }
   httpServer.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref(); // open sockets must not block the exit
@@ -39,7 +40,9 @@ httpServer.on('error', (err) => {
 
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  startEngine()
-    .then(startBots)
-    .catch(console.error);
+  // Only the instance holding the leader lease dispatches; any other one just serves the API.
+  startLeaderElection({
+    onElected: async () => { await startEngine(); startBots(); },
+    onDeposed: async () => { stopBots(); await stopEngine(); },
+  });
 });
