@@ -12,5 +12,8 @@ const AllocationHistorySchema = new mongoose.Schema(
 );
 
 AllocationHistorySchema.index({ orderId: 1 });
+// Score breakdowns are kept 7 days, then MongoDB deletes them (decision K3).
+export const ALLOCATION_HISTORY_TTL_SECONDS = 7 * 24 * 60 * 60;
+AllocationHistorySchema.index({ createdAt: 1 }, { expireAfterSeconds: ALLOCATION_HISTORY_TTL_SECONDS });
 
 export default mongoose.model('AllocationHistory', AllocationHistorySchema);

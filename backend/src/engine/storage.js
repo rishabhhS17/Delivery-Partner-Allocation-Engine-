@@ -19,6 +19,10 @@ import mongoose from 'mongoose';
 
 const ACTIVE_ORDER_STATUSES = ['ASSIGNED', 'PICKED_UP'];
 
+// A finished order no longer needs its route lines (thousands of points each), so they are
+// cleared when it is delivered or cancelled to keep the database small under load (decision K3).
+const CLEARED_ROUTE_FIELDS = { leg1Coords: [], leg2Coords: [], polyline: [] };
+
 /** True while the database connection is up. The engine makes no decision it cannot save. */
 export function isDatabaseAvailable() {
   return mongoose.connection.readyState === 1;
@@ -96,7 +100,7 @@ export function savePickup(orderId, now, actualWait_s) {
 }
 
 export function saveDelivery(orderId, now) {
-  return Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now) });
+  return Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now), ...CLEARED_ROUTE_FIELDS });
 }
 
 /**
@@ -107,7 +111,7 @@ export function saveDelivery(orderId, now) {
 export async function saveCancellation(orderId, now, reason) {
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
-    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason } }
+    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason, ...CLEARED_ROUTE_FIELDS } }
   );
   return modifiedCount === 1;
 }
