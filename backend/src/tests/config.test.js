@@ -40,3 +40,13 @@ test('setWeights does not accept negative total', () => {
     /weights must sum to a positive number/i
   );
 });
+
+test('the search range widens 5 → 7 → 10 km at 60 s and 120 s (decision G1)', async () => {
+  const { searchRangeKm } = await import('../config/constants.js');
+  assert.equal(searchRangeKm(0), 5);
+  assert.equal(searchRangeKm(59_999), 5);
+  assert.equal(searchRangeKm(60_000), 7);
+  assert.equal(searchRangeKm(119_999), 7);
+  assert.equal(searchRangeKm(120_000), 10);
+  assert.equal(searchRangeKm(10 * 60_000), 10);
+});

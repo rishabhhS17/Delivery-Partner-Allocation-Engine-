@@ -46,6 +46,22 @@ export const MAX_PENDING_ORDERS = 5000;
 export const OFFER_TIMEOUT_MS = 30_000;
 export const IGNORED_OFFERS_BEFORE_OFFLINE = 3;
 
+// The search widens while an order goes unassigned (decision G1): the configured max range at
+// first, then 7 km after 60 s and 10 km after 120 s of trying (the TTL still cancels it).
+export const SEARCH_WIDENING_STEPS = [
+  { afterMs: 60_000,  rangeKm: 7 },
+  { afterMs: 120_000, rangeKm: 10 },
+];
+
+/** How far to look for riders for an order that has been in dispatch for elapsedMs. */
+export function searchRangeKm(elapsedMs) {
+  let rangeKm = getH3Config().maxRangeKm;
+  for (const step of SEARCH_WIDENING_STEPS) {
+    if (elapsedMs >= step.afterMs) rangeKm = Math.max(rangeKm, step.rangeKm);
+  }
+  return rangeKm;
+}
+
 // Stage 3 — capped interleaved clubbing (Model A) + anti-starvation.
 export const CLUBBING_CAP                   = 2;    // N-general ceiling; nothing hardcoded to 2
 export const CLUBBING_RESTAURANT_RADIUS_KM  = 1.5;  // B's restaurant near the rider's path

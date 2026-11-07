@@ -37,6 +37,8 @@ const OrderSchema = new mongoose.Schema(
       default: null,
     },
     rejectedRiderIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Rider', default: [] },
+    // When dispatch first looked for a rider — the clock the search widening runs on (G1).
+    dispatchStartedAt: { type: Date },
     promisedBy:   { type: Date },
 
     polyline: { type: [{ lat: Number, lng: Number }], default: [] },

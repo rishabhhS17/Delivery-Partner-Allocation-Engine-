@@ -10,11 +10,12 @@ import {
   CLUBBING_DROP_RADIUS_KM,
   CLUBBING_BEARING_TOLERANCE_DEG,
   MAX_SCORED_CANDIDATES,
+  searchRangeKm,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP } from './state.js';
 import { _meta } from './itinerary.js';
-import { saveAssignment, saveAllocationRecord, saveCancellation, appendOrderEvent } from './storage.js';
+import { saveAssignment, saveAllocationRecord, saveCancellation, appendOrderEvent, saveDispatchStarted } from './storage.js';
 import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
 import { publish } from './broadcast.js';
@@ -103,9 +104,9 @@ function _clubbable(rider, order) {
 export function _chooseAssignment(orderId, order, now, { skipJitHold = false } = {}) {
   const force = skipJitHold || now >= forceAssignAt(order); // PENDING anti-starvation backstop
   const timesScored = countScoring(orderId);
+  const maxRangeKm = currentSearchRangeKm(orderId, order, now);
 
-  const cells = getCandidateCells(order.restaurantLat, order.restaurantLng);
-  const { maxRangeKm } = getH3Config();
+  const cells = getCandidateCells(order.restaurantLat, order.restaurantLng, maxRangeKm);
   const restaurant = { lat: order.restaurantLat, lng: order.restaurantLng };
 
   const seen = new Set();
@@ -155,6 +156,23 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
   }
 
   return { kind: 'assign', orderId, order, winnerId: winner._id.toString(), result, timesScored };
+}
+
+// The radius grows the longer dispatch has been trying (decision G1). The clock starts at the
+// first attempt and is saved, so a restart does not reset it.
+function currentSearchRangeKm(orderId, order, now) {
+  if (!order.dispatchStartedAt) {
+    order.dispatchStartedAt = new Date(now);
+    saveDispatchStarted(order._id, now)
+      .catch(err => log.error('dispatch start write failed', { orderId, error: err.message }));
+  }
+  const rangeKm = searchRangeKm(now - new Date(order.dispatchStartedAt).getTime());
+  if (order.searchRangeKm && rangeKm > order.searchRangeKm) {
+    appendOrderEvent(order._id, 'search_widened', { details: { rangeKm } });
+    log.info('search widened', { orderId, rangeKm });
+  }
+  order.searchRangeKm = rangeKm;
+  return rangeKm;
 }
 
 function hasRejected(order, riderId) {

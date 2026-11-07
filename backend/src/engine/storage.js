@@ -126,6 +126,11 @@ export async function saveDelivery(orderId, now) {
   return modifiedCount === 1;
 }
 
+/** First dispatch attempt only: a later one (or one after a restart) keeps the original time. */
+export function saveDispatchStarted(orderId, now) {
+  return Order.updateOne({ _id: orderId, dispatchStartedAt: null }, { $set: { dispatchStartedAt: new Date(now) } });
+}
+
 /**
  * Offer a PENDING order to a rider until expiresAtMs. Only one offer per order at a time.
  * @returns {Promise<boolean>} true when saved, false when the order changed or is already offered.
