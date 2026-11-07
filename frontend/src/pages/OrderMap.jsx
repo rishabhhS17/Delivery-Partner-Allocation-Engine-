@@ -31,6 +31,15 @@ const leg2LineLayer = {
   paint: { 'line-color': '#7928ca', 'line-width': 3, 'line-opacity': 0.85 },
 };
 
+// The rider's current leg when they are delivering another (clubbed) order first.
+const otherOrderLegLayer = {
+  id:   'other-order-leg',
+  type: 'line',
+  paint: { 'line-color': '#a1a1a1', 'line-width': 3, 'line-opacity': 0.7, 'line-dasharray': [1, 1.5] },
+};
+
+const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] };
+
 const riderConnectorLayer = {
   id:   'rider-connector',
   type: 'line',
@@ -72,15 +81,27 @@ export default function OrderMap() {
 
   useEffect(fetchOrder, [id]);
 
+  // The rider carrying this order — it may not be the order they are heading to right now when
+  // they carry more than one (clubbed orders).
   const assignedRider = useMemo(
-    () => riders.find((r) => r.orderId === id),
+    () => riders.find((r) => r.orderId === id || r.onboardOrderIds?.includes(id)),
     [riders, id],
   );
+  const isRiderOnAnotherOrder = Boolean(assignedRider && assignedRider.orderId && assignedRider.orderId !== id);
+
+  // The leg the rider is on now, toward the other order's stop (decision K7).
+  const otherOrderLegGeojson = useMemo(() => {
+    if (!isRiderOnAnotherOrder) return EMPTY_GEOJSON;
+    const coords = (routes.get(assignedRider.orderId)?.leg1Coords ?? []).slice(assignedRider.legStepIndex ?? 0);
+    return coords.length >= 2
+      ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }] }
+      : EMPTY_GEOJSON;
+  }, [isRiderOnAnotherOrder, assignedRider, routes]);
 
   const leg1Geojson = useMemo(() => {
     // Only draw a leg when its live rider is present — otherwise a stale/just-delivered order's
     // persisted coords would render an orphaned line with no rider pin on it.
-    if (!order || order.status !== 'ASSIGNED' || !assignedRider) return { type: 'FeatureCollection', features: [] };
+    if (!order || order.status !== 'ASSIGNED' || !assignedRider || isRiderOnAnotherOrder) return EMPTY_GEOJSON;
     const live    = routes.get(id);
     const full    = live?.leg1Coords ?? order.leg1Coords ?? [];
     const stepIdx = assignedRider?.legStepIndex ?? 0;
@@ -91,10 +112,10 @@ export default function OrderMap() {
         ? [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }]
         : [],
     };
-  }, [order, assignedRider, routes, id]);
+  }, [order, assignedRider, isRiderOnAnotherOrder, routes, id]);
 
   const leg2Geojson = useMemo(() => {
-    if (!order || !assignedRider) return { type: 'FeatureCollection', features: [] };
+    if (!order || !assignedRider || isRiderOnAnotherOrder) return EMPTY_GEOJSON;
     const live    = routes.get(id);
     const full    = live?.leg2Coords ?? order.leg2Coords ?? [];
     const stepIdx = order.status === 'PICKED_UP' ? (assignedRider?.legStepIndex ?? 0) : 0;
@@ -105,10 +126,10 @@ export default function OrderMap() {
         ? [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }]
         : [],
     };
-  }, [order, assignedRider, routes, id]);
+  }, [order, assignedRider, isRiderOnAnotherOrder, routes, id]);
 
   const riderConnectorGeojson = useMemo(() => {
-    if (!assignedRider || !order) return { type: 'FeatureCollection', features: [] };
+    if (!assignedRider || !order || isRiderOnAnotherOrder) return EMPTY_GEOJSON;
     let dest, color;
     if (order.status === 'ASSIGNED') {
       dest  = [order.restaurantLng, order.restaurantLat];
@@ -127,7 +148,7 @@ export default function OrderMap() {
         properties: { color },
       }],
     };
-  }, [assignedRider, order]);
+  }, [assignedRider, order, isRiderOnAnotherOrder]);
 
   const initialView = order
     ? { longitude: order.restaurantLng, latitude: order.restaurantLat, zoom: 13 }
@@ -143,11 +164,14 @@ export default function OrderMap() {
 
       <div className={styles.mapPanelWrap}>
         <MapPanel
-          eyebrow="Route — Live remaining path"
+          eyebrow={isRiderOnAnotherOrder
+            ? `Rider ${assignedRider.name} — Delivering another order first`
+            : 'Route — Live remaining path'}
           legend={[
             { label: 'To restaurant', color: 'warning' },
             { label: 'To customer',   color: 'violet'  },
             { label: 'Rider',         color: 'link'    },
+            ...(isRiderOnAnotherOrder ? [{ label: 'Rider\'s current leg', color: 'faint' }] : []),
           ]}
           variant="full"
         >
@@ -183,6 +207,9 @@ export default function OrderMap() {
                 <Source id="rider-connector" type="geojson" data={riderConnectorGeojson}>
                   <Layer {...riderConnectorLayer} />
                 </Source>
+                <Source id="other-order-leg" type="geojson" data={otherOrderLegGeojson}>
+                  <Layer {...otherOrderLegLayer} />
+                </Source>
 
                 {order && (
                   <Marker longitude={order.restaurantLng} latitude={order.restaurantLat} anchor="center">
@@ -204,7 +231,10 @@ export default function OrderMap() {
 
                 {assignedRider && (
                   <Marker longitude={assignedRider.lng} latitude={assignedRider.lat} anchor="center">
-                    <RiderMarker rider={assignedRider} />
+                    <div className={styles.markerWrap}>
+                      {isRiderOnAnotherOrder && <MarkerLabel label="Delivering another order first" />}
+                      <RiderMarker rider={assignedRider} />
+                    </div>
                   </Marker>
                 )}
               </Map>
