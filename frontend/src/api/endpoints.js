@@ -55,6 +55,7 @@ export const getPresenterState     = ()       => api.get('/presenter');
 export const forceRiderAction      = (action) => api.post(`/presenter/riders/${action}`);
 export const forceKitchenAction    = (action) => api.post(`/presenter/kitchens/${action}`);
 export const startDatabaseOutage   = ()       => api.post('/presenter/database-outage');
+export const crashEngine           = ()       => api.post('/presenter/crash-engine');
 
 // Engine health (event-loop delay, tick times, queues, DB latency)
 export const getHealth = () => api.get('/health');

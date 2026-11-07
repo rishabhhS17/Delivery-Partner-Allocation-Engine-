@@ -233,7 +233,7 @@ All routes are prefixed with `/api`. Everything except `/auth`, `/health` and `/
 | `GET` `PUT` | `/config/weights` | Read / update scoring weights (`PUT /config/weights/reset` restores defaults) |
 | `GET` | `/simulation/status` | Simulation status (it always runs while the server runs) |
 | `GET` | `/stream` | Live feed (Server-Sent Events): a snapshot, then the fleet every second and each order event |
-| `GET` `POST` | `/presenter` · `/presenter/riders/:action` · `/presenter/kitchens/:action` · `/presenter/database-outage` | Presenter panel: force the next edge case (rider reject / ignore / cancel, restaurant reject / delay / early, 60 s DB outage when `SIMULATION_ENABLED=true`) |
+| `GET` `POST` | `/presenter` · `/presenter/riders/:action` · `/presenter/kitchens/:action` · `/presenter/database-outage` · `/presenter/crash-engine` | Presenter panel: force the next edge case (rider reject / ignore / cancel, restaurant reject / delay / early, 60 s DB outage when `SIMULATION_ENABLED=true`), or crash the engine and watch it recover from the database |
 | `POST` | `/intake/orders` | Upstream order service intake (`X-Service-Key` header, no login). Same `externalOrderId` → the existing order is returned, never a duplicate |
 
 ### Live stream events (`GET /api/stream`, server → client)

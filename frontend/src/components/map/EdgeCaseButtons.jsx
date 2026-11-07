@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Tooltip } from '@mui/material';
 import { useToast } from '../../context/ToastContext';
 import {
-  getPresenterState, forceRiderAction, forceKitchenAction, startDatabaseOutage,
+  getPresenterState, forceRiderAction, forceKitchenAction, startDatabaseOutage, crashEngine,
 } from '../../api/endpoints';
 import styles from './PresenterDrawer.module.css';
 
@@ -24,6 +24,19 @@ const KITCHEN_BUTTONS = [
 export default function EdgeCaseButtons() {
   const toast = useToast();
   const [state, setState] = useState(null);
+  const [isCrashing, setIsCrashing] = useState(false);
+
+  const handleCrash = async () => {
+    setIsCrashing(true);
+    try {
+      const { data } = await crashEngine();
+      toast.success(`Engine recovered in ${data.recoveredInMs} ms — ${data.riders} riders, ${data.pendingOrders} waiting orders`);
+    } catch (err) {
+      toast.error(err.response?.data?.message ?? 'Crash/recover failed');
+    } finally {
+      setIsCrashing(false);
+    }
+  };
 
   useEffect(() => {
     const load = () => getPresenterState().then((res) => setState(res.data)).catch(() => {});
@@ -78,6 +91,14 @@ export default function EdgeCaseButtons() {
             </Button>
           </span>
         </Tooltip>
+      </div>
+
+      <div className={styles.section}>
+        <span className={styles.sectionTitle}>Engine</span>
+        <Button size="small" variant="outlined" color="error" disabled={isCrashing} onClick={handleCrash}>
+          {isCrashing ? 'Recovering…' : 'Crash engine'}
+        </Button>
+        <span className={styles.hint}>Wipes the engine's memory and rebuilds it from the database, as after a real crash.</span>
       </div>
 
       {pending.length > 0 && <span className={styles.hint}>Waiting to happen: {pending.join(', ')}</span>}

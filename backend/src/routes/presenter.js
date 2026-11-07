@@ -1,6 +1,6 @@
 import express from 'express';
 import { config } from '../config/env.js';
-import { simulateDatabaseOutage, getDatabaseOutageEnd } from '../engine/index.js';
+import { simulateDatabaseOutage, getDatabaseOutageEnd, crashAndRecover } from '../engine/index.js';
 import {
   forceNextRiderAction, getForcedRiderActions, forceNextKitchenAction, getForcedKitchenActions,
 } from '../sim/index.js';
@@ -47,6 +47,16 @@ router.post('/database-outage', (req, res) => {
     return res.status(403).json({ message: 'The outage test hook is off (set SIMULATION_ENABLED=true to enable it)' });
   }
   res.json({ databaseOutageEndsAt: simulateDatabaseOutage(OUTAGE_DURATION_MS) });
+});
+
+// POST /api/presenter/crash-engine — wipe the engine's memory and recover from the database
+// using the real restart path, without exiting (decision I1).
+router.post('/crash-engine', async (req, res, next) => {
+  try {
+    res.json(await crashAndRecover());
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

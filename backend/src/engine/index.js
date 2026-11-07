@@ -6,7 +6,7 @@
 import { latLngToCell } from 'h3-js';
 import { getH3Config, MAX_PENDING_ORDERS } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
-import { riderState, pendingQueue, runtime } from './state.js';
+import { riderState, pendingQueue, h3Buckets, activeRoutes, recentAssignments, runtime } from './state.js';
 import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup, _dropOrderFromRider } from './riderLifecycle.js';
 import { _chooseAssignment } from './dispatch.js';
@@ -14,12 +14,12 @@ import { hydrate } from './hydrate.js';
 import {
   runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
 } from './dispatchLoop.js';
-import { _makeOffer, _acceptOffer, _rejectOffer, _withdrawOffer } from './offers.js';
+import { _makeOffer, _acceptOffer, _rejectOffer, _withdrawOffer, clearOffers } from './offers.js';
 import { _listKitchenTickets, _updatePrepEstimate } from './prepEstimates.js';
 import { _applyRiderAvailability } from './riderLifecycle.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
-import { enqueueOrder, scheduleWake, dequeueOrder } from './wakeList.js';
+import { enqueueOrder, scheduleWake, dequeueOrder, clearWakeList } from './wakeList.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
@@ -262,6 +262,38 @@ export function simulateDatabaseOutage(durationMs) {
 /** @returns {number|null} epoch ms the simulated outage ends, or null when there is none */
 export function getDatabaseOutageEnd() {
   return getSimulatedOutageUntil();
+}
+
+/**
+ * Presenter "crash" (decision I1): throw away everything the engine holds in memory and recover
+ * from the database through the same startup code a real crash and restart would run — without
+ * exiting the process. Like a real crash, nothing is saved first: riders' positions are rebuilt
+ * from their saved legs. Open browsers get a fresh snapshot.
+ * @returns {Promise<{ recoveredInMs: number, riders: number, pendingOrders: number }>}
+ */
+export async function crashAndRecover() {
+  const crashedAt = performance.now();
+  await runExclusive(() => {
+    runtime.running = false;
+    stopLoops();
+    riderState.clear();
+    h3Buckets.clear();
+    pendingQueue.clear();
+    activeRoutes.clear();
+    recentAssignments.length = 0;
+    clearWakeList();
+    clearOffers();
+  });
+  log.warn('engine state wiped (simulated crash), recovering from the database');
+  await startEngine();
+  publish('snapshot', buildLiveSnapshot());
+  const recovery = {
+    recoveredInMs: Math.round(performance.now() - crashedAt),
+    riders: riderState.size,
+    pendingOrders: pendingQueue.size,
+  };
+  log.info('engine recovered', recovery);
+  return recovery;
 }
 
 // ─── Rider availability ──────────────────────────────────────────────────────
