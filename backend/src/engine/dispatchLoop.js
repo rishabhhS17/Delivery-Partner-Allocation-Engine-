@@ -3,6 +3,10 @@ import { pendingQueue, runtime } from './state.js';
 import { publish, buildFleetSnapshot } from './broadcast.js';
 import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
 import { recordDispatchRoundMs, recordBroadcastMs } from './health.js';
+import { enqueueOrder, takeDueOrderIds, scheduleWake } from './wakeList.js';
+
+// An order with no rider in range is looked at again after this long.
+const NO_RIDER_RETRY_MS = 1000;
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
@@ -52,7 +56,7 @@ export function startPendingOrderSync() {
       for (const order of await loadPendingOrders()) {
         const orderId = order._id.toString();
         // A stale read is harmless: the assignment's conditional save refuses a changed order.
-        if (!pendingQueue.has(orderId)) pendingQueue.set(orderId, order);
+        if (!pendingQueue.has(orderId)) enqueueOrder(order);
       }
     }).catch(err => log.error('pending order sync failed', { error: err.message }));
   }, PENDING_SYNC_EVERY_MS);
@@ -87,9 +91,11 @@ async function runDispatchRound() {
   // Phase 1 — drop orders that waited too long after becoming dispatchable.
   await _cancelExpiredOrders(Date.now());
 
-  // Phase 2 — allocate pending orders (marginal-cost clubbing + JIT hold + force-assign)
-  for (const [orderId, order] of [...pendingQueue]) {
-    if (!pendingQueue.has(orderId)) continue;
+  // Phase 2 — score only the orders whose wake-up time has come (marginal-cost clubbing + JIT
+  // hold + force-assign); the rest sleep in the wake-up list.
+  for (const orderId of takeDueOrderIds(Date.now())) {
+    const order = pendingQueue.get(orderId);
+    if (!order) continue;
     let decision;
     try {
       decision = _chooseAssignment(orderId, order, Date.now());
@@ -97,7 +103,11 @@ async function runDispatchRound() {
       await _cancelOrderAfterEngineError(orderId, order, err);
       continue;
     }
-    if (decision) await _commitAssignment(decision);
+    if (decision.kind === 'hold') scheduleWake(orderId, decision.wakeAt);
+    else if (decision.kind === 'no_rider') scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_MS);
+    else if (!(await _commitAssignment(decision)) && pendingQueue.has(orderId)) {
+      scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_MS); // save failed: try again shortly
+    }
   }
 }
 

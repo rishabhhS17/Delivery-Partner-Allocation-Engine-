@@ -9,7 +9,6 @@ import {
   CLUBBING_RESTAURANT_RADIUS_KM,
   CLUBBING_DROP_RADIUS_KM,
   CLUBBING_BEARING_TOLERANCE_DEG,
-  AGING_LOCK_S,
 } from '../config/constants.js';
 import { haversine } from '../utils/haversine.js';
 import { riderState, h3Buckets, pendingQueue, recentAssignments, RECENT_CAP } from './state.js';
@@ -19,6 +18,7 @@ import { _freeSlot, _syncIndex } from './h3Index.js';
 import { _beginLegToHead } from './riderLifecycle.js';
 import { publish } from './broadcast.js';
 import { recordTimeToAssignMs } from './health.js';
+import { dequeueOrder, countScoring, forceAssignAt } from './wakeList.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
@@ -41,7 +41,7 @@ export async function _cancelExpiredOrders(now) {
       log.error('TTL cancel write failed, will retry', { orderId, error: err.message });
       continue;
     }
-    pendingQueue.delete(orderId);
+    dequeueOrder(orderId);
     if (!isCancelled) continue; // the order had already changed (assigned or cancelled elsewhere)
     appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
     publish('order:cancelled', { orderId, reason: 'no_rider' });
@@ -54,7 +54,7 @@ export async function _cancelExpiredOrders(now) {
 // otherwise stall dispatch for the whole city (decision E5, amended 2026-11-07).
 export async function _cancelOrderAfterEngineError(orderId, order, err) {
   log.error('dispatch failed for this order, cancelling it', { orderId, reason: 'engine_error', error: err });
-  pendingQueue.delete(orderId);
+  dequeueOrder(orderId);
   try {
     if (!(await saveCancellation(order._id, Date.now(), 'engine_error'))) return;
   } catch (saveErr) {
@@ -91,12 +91,14 @@ function _clubbable(rider, order) {
   return false;
 }
 
-// Picks the rider for one queued order. Pure decision, no writes: returns the chosen rider and
-// score, or null when the order stays queued (no rider, or the just-in-time hold says not yet).
+// Picks the rider for one queued order. Pure decision, no writes. Returns one of:
+//   { kind: 'assign', … }      — assign now to the chosen rider
+//   { kind: 'hold', wakeAt }   — the best rider need not leave yet: look again at wakeAt
+//   { kind: 'no_rider' }       — nobody in range with room
 // skipJitHold chooses now instead of waiting for the departure moment (manual dispatch).
 export function _chooseAssignment(orderId, order, now, { skipJitHold = false } = {}) {
-  const promisedByMs = order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
-  const force = skipJitHold || (promisedByMs - now) / 1000 <= AGING_LOCK_S; // PENDING anti-starvation backstop
+  const force = skipJitHold || now >= forceAssignAt(order); // PENDING anti-starvation backstop
+  const timesScored = countScoring(orderId);
 
   const cells = getCandidateCells(order.restaurantLat, order.restaurantLng);
   const { maxRangeKm } = getH3Config();
@@ -124,10 +126,10 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
       });
     }
   }
-  if (!candidates.length) return null;
+  if (!candidates.length) return { kind: 'no_rider' };
 
   const result = allocateClub(order, candidates, getWeights(), now);
-  if (!result) return null;
+  if (!result) return { kind: 'no_rider' };
 
   const winner = result.winner.rider;
 
@@ -137,16 +139,16 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
     const grace_s  = order.jitGrace_s ?? 0;
     const prepReadyMs = order.prepReadyAt ? new Date(order.prepReadyAt).getTime() : now;
     const departBy = prepReadyMs - (travel_s + grace_s) * 1000;
-    if (now < departBy) return null; // hold this tick
+    if (now < departBy) return { kind: 'hold', wakeAt: Math.min(departBy, forceAssignAt(order)) };
   }
 
-  return { orderId, order, winnerId: winner._id.toString(), result };
+  return { kind: 'assign', orderId, order, winnerId: winner._id.toString(), result, timesScored };
 }
 
 // Saves the assignment, then applies and announces it. The save is one conditional update on the
 // order (it must still be PENDING), so nothing is broadcast that the database does not hold.
 // Returns the assignment summary, or null when it could not be saved.
-export async function _commitAssignment({ orderId, order, winnerId, result }) {
+export async function _commitAssignment({ orderId, order, winnerId, result, timesScored }) {
   const now = Date.now();
   let isSaved;
   try {
@@ -157,15 +159,15 @@ export async function _commitAssignment({ orderId, order, winnerId, result }) {
   }
   if (!isSaved) {
     // Someone else changed the order (cancelled, or assigned elsewhere) — it is no longer ours.
-    pendingQueue.delete(orderId);
+    dequeueOrder(orderId);
     log.warn('order was no longer PENDING at save time, dropped from queue', { orderId });
     return null;
   }
-  pendingQueue.delete(orderId);
+  dequeueOrder(orderId);
   if (order.createdAt) recordTimeToAssignMs(now - new Date(order.createdAt).getTime());
   appendOrderEvent(order._id, 'assigned', {
     riderId: result.winner.rider._id,
-    details: { score: result.score, candidatesConsidered: result.candidatesConsidered },
+    details: { score: result.score, candidatesConsidered: result.candidatesConsidered, timesScored },
   });
   saveAllocationRecord(order._id, result.winner.rider._id, result)
     .catch(err => log.error('allocation history write failed', { orderId, error: err.message }));

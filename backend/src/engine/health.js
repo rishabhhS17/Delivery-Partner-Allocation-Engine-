@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { riderState, pendingQueue, runtime } from './state.js';
 import { isDatabaseAvailable, pingDatabase } from './storage.js';
+import { sleepingOrderCount } from './wakeList.js';
 
 // ─── Engine health ───────────────────────────────────────────────────────────
 // The numbers behind GET /api/health and the dashboard's "Engine health" card (decision E6):
@@ -68,6 +69,7 @@ export async function getEngineHealth() {
     lastBroadcastMs:     lastDurationsMs.broadcast,
     queues: {
       pendingOrders: pendingQueue.size,
+      sleepingOrders: sleepingOrderCount(),
       ordersInDelivery,
       liveRiders:    riderState.size,
     },

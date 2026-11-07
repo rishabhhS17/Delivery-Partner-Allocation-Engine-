@@ -16,6 +16,7 @@ import {
 } from './dispatchLoop.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
+import { enqueueOrder } from './wakeList.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
@@ -115,7 +116,7 @@ export function getStatus() {
  * engine is still hydrating is either loaded from the DB by hydrate or queued here afterwards.
  */
 export function addPendingOrder(order) {
-  pendingQueue.set(order._id.toString(), order);
+  enqueueOrder(order);
   appendOrderEvent(order._id, 'created', {
     details: { restaurantName: order.restaurantName, customerName: order.customerName, prepReadyAt: order.prepReadyAt },
   });
@@ -144,7 +145,7 @@ export function dispatchNow(orderId) {
     const order = pendingQueue.get(id);
     if (!order) return { status: 'not_pending' };
     const decision = _chooseAssignment(id, order, Date.now(), { skipJitHold: true });
-    const assignment = decision ? await _commitAssignment(decision) : null;
+    const assignment = decision.kind === 'assign' ? await _commitAssignment(decision) : null;
     if (assignment) return { status: 'assigned', orderId: id, ...assignment };
     // The save may have found the order already changed and dropped it from the queue.
     return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };

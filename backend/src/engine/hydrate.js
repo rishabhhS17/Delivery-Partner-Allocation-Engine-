@@ -5,6 +5,7 @@ import { riderState, h3Buckets, pendingQueue, activeRoutes, recentAssignments } 
 import { _meta } from './itinerary.js';
 import { _freeSlot, _addToH3 } from './h3Index.js';
 import { positionAlongLeg } from '../utils/polyline.js';
+import { enqueueOrder, clearWakeList } from './wakeList.js';
 import { _beginLegToHead, _fetchHeadRoute } from './riderLifecycle.js';
 import {
   loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders, appendOrderEvent,
@@ -22,6 +23,7 @@ export async function hydrate() {
   riderState.clear();
   h3Buckets.clear();
   pendingQueue.clear();
+  clearWakeList();
   activeRoutes.clear();
   recentAssignments.length = 0;
 
@@ -91,7 +93,7 @@ export async function hydrate() {
     log.warn('re-queued orders whose rider no longer exists', { orderIds: ownerlessOrderIds });
   }
 
-  for (const ord of await loadPendingOrders()) pendingQueue.set(ord._id.toString(), ord);
+  for (const ord of await loadPendingOrders()) enqueueOrder(ord, now);
 
   log.info('hydrated from the database', { riders: riderState.size, pendingOrders: pendingQueue.size });
 }
