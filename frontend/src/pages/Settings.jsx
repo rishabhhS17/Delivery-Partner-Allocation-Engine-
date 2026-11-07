@@ -38,6 +38,19 @@ const BOT_GROUPS = [
       { key: 'cancelBeforePickupPercent', label: 'Cancel before pickup (%)', step: 1, description: 'Accepted orders given back on the way to the restaurant.' },
     ],
   },
+  {
+    group: 'kitchen',
+    title: 'Kitchen bot behaviour',
+    fields: [
+      { key: 'rejectPercent', label: 'Restaurant rejects (%)', step: 1, description: 'Orders the restaurant turns down within seconds; they are cancelled.' },
+      { key: 'delayPercent', label: 'Food delayed (%)', step: 1, description: 'Orders whose food runs late, announced halfway through the estimate.' },
+      { key: 'delayMinMinutes', label: 'Delay, min (minutes)', step: 1, description: 'Shortest delay.' },
+      { key: 'delayMaxMinutes', label: 'Delay, max (minutes)', step: 1, description: 'Longest delay.' },
+      { key: 'earlyPercent', label: 'Food early (%)', step: 1, description: 'Orders whose food is ready ahead of the estimate.' },
+      { key: 'earlyMinMinutes', label: 'Early by, min (minutes)', step: 1, description: 'Least time early.' },
+      { key: 'earlyMaxMinutes', label: 'Early by, max (minutes)', step: 1, description: 'Most time early.' },
+    ],
+  },
 ];
 
 function BotBehaviourSection({ group, title, fields, values, onChange }) {

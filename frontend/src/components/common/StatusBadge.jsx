@@ -22,6 +22,7 @@ const STATUS_MAP = {
 const CANCEL_REASON_LABELS = {
   no_rider:     'no rider',
   engine_error: 'engine error',
+  restaurant_rejected: 'restaurant rejected',
 };
 
 export default function StatusBadge({ kind, status, cancelReason }) {

@@ -19,11 +19,13 @@ import { _listKitchenTickets, _updatePrepEstimate } from './prepEstimates.js';
 import { _applyRiderAvailability } from './riderLifecycle.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
-import { enqueueOrder, scheduleWake } from './wakeList.js';
+import { enqueueOrder, scheduleWake, dequeueOrder } from './wakeList.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
-import { saveFinalPositions, appendOrderEvent, clearOffer, saveRiderCancellation, loadOrder } from './storage.js';
+import {
+  saveFinalPositions, appendOrderEvent, clearOffer, saveRiderCancellation, loadOrder, saveRestaurantRejection,
+} from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -204,6 +206,44 @@ export function getKitchenTickets() {
  */
 export function updatePrepEstimate(orderId, foodReadyAt) {
   return runExclusive(() => _updatePrepEstimate(String(orderId), foodReadyAt));
+}
+
+/**
+ * The restaurant turns the order down (decision H3). Allowed until pickup: the order is
+ * cancelled with reason 'restaurant_rejected', and a rider already heading there moves on.
+ * @returns {Promise<'cancelled'|'not_found'|'failed'>}
+ */
+export function restaurantRejectedOrder(orderId) {
+  return runExclusive(async () => {
+    const oid = String(orderId);
+    const pendingOrder = pendingQueue.get(oid);
+    let carrierId = null;
+    for (const [riderId, rider] of riderState) {
+      const meta = rider.orders.get(oid);
+      if (meta && !meta.pickedUp) carrierId = riderId;
+    }
+    if (!pendingOrder && !carrierId) return 'not_found';
+    const now = Date.now();
+    let isSaved;
+    try {
+      isSaved = await saveRestaurantRejection(pendingOrder?._id ?? riderState.get(carrierId).orders.get(oid)._id, now);
+    } catch (err) {
+      log.error('restaurant rejection write failed', { orderId: oid, error: err.message });
+      return 'failed';
+    }
+    if (!isSaved) return 'not_found';
+
+    if (pendingOrder) {
+      dequeueOrder(oid);
+      _withdrawOffer(oid);
+    } else {
+      _dropOrderFromRider(carrierId, riderState.get(carrierId), oid, now);
+    }
+    appendOrderEvent(oid, 'cancelled', { riderId: carrierId, details: { reason: 'restaurant_rejected' } });
+    publish('order:cancelled', { orderId: oid, reason: 'restaurant_rejected' });
+    log.warn('restaurant rejected the order, cancelled', { orderId: oid, riderId: carrierId });
+    return 'cancelled';
+  });
 }
 
 // ─── Rider availability ──────────────────────────────────────────────────────

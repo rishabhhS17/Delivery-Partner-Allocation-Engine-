@@ -174,3 +174,38 @@ export function setRiderBotBehaviour(update = {}) {
   if (next.rejectPercent + next.ignorePercent > 100) throw new Error('rejectPercent + ignorePercent must not exceed 100');
   currentRiderBotBehaviour = next;
 }
+
+// How the simulated restaurants behave (decision H3). All rates 0 = every kitchen on time.
+export const DEFAULT_KITCHEN_BOT_BEHAVIOUR = {
+  rejectPercent:   2,   // orders the restaurant turns down (within seconds of the order)
+  delayPercent:    10,  // orders whose food runs late…
+  delayMinMinutes: 3,   // …by between these many minutes,
+  delayMaxMinutes: 8,   //    announced halfway through the original estimate
+  earlyPercent:    10,  // orders whose food is ready early…
+  earlyMinMinutes: 1,   // …by between these many minutes
+  earlyMaxMinutes: 3,
+};
+
+let currentKitchenBotBehaviour = { ...DEFAULT_KITCHEN_BOT_BEHAVIOUR };
+
+export function getKitchenBotBehaviour() {
+  return currentKitchenBotBehaviour;
+}
+
+/** Validates and applies a partial update; throws with a readable message on bad input. */
+export function setKitchenBotBehaviour(update = {}) {
+  const next = { ...currentKitchenBotBehaviour };
+  for (const key of Object.keys(DEFAULT_KITCHEN_BOT_BEHAVIOUR)) {
+    if (update[key] === undefined) continue;
+    const value = Number(update[key]);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${key} must be a number of 0 or more`);
+    if (key.endsWith('Percent') && value > 100) throw new Error(`${key} must be between 0 and 100`);
+    next[key] = value;
+  }
+  if (next.delayMinMinutes > next.delayMaxMinutes) throw new Error('delayMinMinutes must not be more than delayMaxMinutes');
+  if (next.earlyMinMinutes > next.earlyMaxMinutes) throw new Error('earlyMinMinutes must not be more than earlyMaxMinutes');
+  if (next.rejectPercent + next.delayPercent + next.earlyPercent > 100) {
+    throw new Error('rejectPercent + delayPercent + earlyPercent must not exceed 100');
+  }
+  currentKitchenBotBehaviour = next;
+}

@@ -4,6 +4,7 @@ import {
   getOrderTtl, setOrderTtl,
   getH3Config, setH3Config,
   getRiderBotBehaviour, setRiderBotBehaviour,
+  getKitchenBotBehaviour, setKitchenBotBehaviour,
 } from '../config/constants.js';
 import { clearCandidateCache } from '../services/allocationEngine.js';
 
@@ -78,16 +79,17 @@ router.put('/h3', (req, res) => {
 });
 
 // ── Bot behaviour (applies live) ──────────────────────────────────────────────
-// GET /api/config/bots → { rider: { replyMinS, replyMaxS, rejectPercent, ignorePercent, cancelBeforePickupPercent } }
+// GET /api/config/bots → { rider: {…}, kitchen: {…} } (see DEFAULT_*_BOT_BEHAVIOUR in constants)
 router.get('/bots', (req, res) => {
-  res.json({ rider: getRiderBotBehaviour() });
+  res.json({ rider: getRiderBotBehaviour(), kitchen: getKitchenBotBehaviour() });
 });
 
-// PUT /api/config/bots  body: { rider?: { …any of the fields above } }
+// PUT /api/config/bots  body: { rider?: { …any rider fields }, kitchen?: { …any kitchen fields } }
 router.put('/bots', (req, res) => {
   try {
     if (req.body?.rider) setRiderBotBehaviour(req.body.rider);
-    res.json({ rider: getRiderBotBehaviour() });
+    if (req.body?.kitchen) setKitchenBotBehaviour(req.body.kitchen);
+    res.json({ rider: getRiderBotBehaviour(), kitchen: getKitchenBotBehaviour() });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

@@ -60,3 +60,13 @@ test('rider bot behaviour rates are validated (decision G4)', async () => {
   assert.equal(getRiderBotBehaviour().rejectPercent, 0, 'a perfect bot is allowed');
   setRiderBotBehaviour(DEFAULT_RIDER_BOT_BEHAVIOUR);
 });
+
+test('kitchen bot behaviour rates are validated (decision H3)', async () => {
+  const { getKitchenBotBehaviour, setKitchenBotBehaviour, DEFAULT_KITCHEN_BOT_BEHAVIOUR } = await import('../config/constants.js');
+  assert.deepEqual(getKitchenBotBehaviour(), DEFAULT_KITCHEN_BOT_BEHAVIOUR);
+  assert.throws(() => setKitchenBotBehaviour({ delayPercent: 60, earlyPercent: 50 }), /must not exceed 100/);
+  assert.throws(() => setKitchenBotBehaviour({ delayMinMinutes: 9, delayMaxMinutes: 2 }), /delayMinMinutes/);
+  setKitchenBotBehaviour({ rejectPercent: 0, delayPercent: 0, earlyPercent: 0 });
+  assert.equal(getKitchenBotBehaviour().delayPercent, 0, 'every kitchen on time is allowed');
+  setKitchenBotBehaviour(DEFAULT_KITCHEN_BOT_BEHAVIOUR);
+});

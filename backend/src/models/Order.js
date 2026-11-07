@@ -59,9 +59,10 @@ const OrderSchema = new mongoose.Schema(
     pickedUpAt:      { type: Date },
     deliveredAt:     { type: Date },
     cancelledAt:     { type: Date },
-    // Why a CANCELLED order was cancelled: no rider before its time limit, or the engine hit an
-    // error on this order (it is cancelled so one bad order cannot take the city down).
-    cancelReason:    { type: String, enum: ['no_rider', 'engine_error', null], default: null },
+    // Why a CANCELLED order was cancelled: no rider before its time limit, the engine hit an
+    // error on this order (so one bad order cannot take the city down), or the restaurant
+    // turned it down.
+    cancelReason:    { type: String, enum: ['no_rider', 'engine_error', 'restaurant_rejected', null], default: null },
   },
   { timestamps: true }
 );

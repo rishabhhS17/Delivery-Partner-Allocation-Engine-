@@ -6,13 +6,16 @@ import { startRiderBots, stopRiderBots, getRiderBotTickMs } from './riderBots.js
 
 export { getRiderBotTickMs };
 import { startCustomerBot, stopCustomerBot } from './customerBot.js';
+import { startKitchenBot, stopKitchenBot } from './kitchenBot.js';
 
 export function startBots() {
   startRiderBots();
   startCustomerBot();
+  startKitchenBot();
 }
 
 export function stopBots() {
   stopRiderBots();
   stopCustomerBot();
+  stopKitchenBot();
 }

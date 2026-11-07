@@ -158,6 +158,22 @@ export async function savePrepEstimate(orderId, foodReadyAt) {
   return modifiedCount === 1;
 }
 
+/**
+ * The restaurant turns an order down before pickup: it is cancelled, even if a rider is already
+ * on the way to collect it.
+ * @returns {Promise<boolean>} true when saved, false when the order is past pickup or finished.
+ */
+export async function saveRestaurantRejection(orderId, now) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: { $in: ['PENDING', 'ASSIGNED'] } },
+    { $set: {
+      status: 'CANCELLED', cancelReason: 'restaurant_rejected', cancelledAt: new Date(now),
+      assignedRiderId: null, offer: null, ...CLEARED_ROUTE_FIELDS,
+    } }
+  );
+  return modifiedCount === 1;
+}
+
 /** First dispatch attempt only: a later one (or one after a restart) keeps the original time. */
 export function saveDispatchStarted(orderId, now) {
   return Order.updateOne({ _id: orderId, dispatchStartedAt: null }, { $set: { dispatchStartedAt: new Date(now) } });
