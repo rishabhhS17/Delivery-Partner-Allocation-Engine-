@@ -138,7 +138,7 @@ export default function OrderMap() {
       <PageHeader
         title="Order Map"
         description="Restaurant, customer, and assigned rider for this delivery."
-        action={order && <StatusBadge kind="order" status={order.status} />}
+        action={order && <StatusBadge kind="order" status={order.status} cancelReason={order.cancelReason} />}
       />
 
       <div className={styles.mapPanelWrap}>

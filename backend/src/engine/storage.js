@@ -80,11 +80,15 @@ export function saveDelivery(orderId, now) {
   return Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now) });
 }
 
-/** Cancels a PENDING order. Resolves true when it was saved, false when it had already changed. */
-export async function saveCancellation(orderId, now) {
+/**
+ * Cancels a PENDING order and records why.
+ * @param {'no_rider'|'engine_error'} reason
+ * @returns {Promise<boolean>} true when it was saved, false when the order had already changed.
+ */
+export async function saveCancellation(orderId, now, reason) {
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
-    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null } }
+    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason } }
   );
   return modifiedCount === 1;
 }

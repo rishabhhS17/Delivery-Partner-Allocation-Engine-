@@ -5,6 +5,16 @@ import { config } from './config/env.js';
 import { startEngine, stopEngine, startLeaderElection, resignLeadership } from './engine/index.js';
 import { startBots, stopBots } from './sim/index.js';
 
+// Anything unexpected that escapes is logged, then the process exits so Render restarts it and
+// the engine rebuilds itself from the database (decision E1). Carrying on with half-applied
+// in-memory state would be worse than a restart.
+const exitOnUnexpectedError = (kind) => (err) => {
+  console.error(`[server] ${kind} — exiting so the platform restarts the service:`, err);
+  process.exit(1);
+};
+process.on('uncaughtException', exitOnUnexpectedError('uncaught exception'));
+process.on('unhandledRejection', exitOnUnexpectedError('unhandled promise rejection'));
+
 await connectDB();
 
 const httpServer = createServer(app);

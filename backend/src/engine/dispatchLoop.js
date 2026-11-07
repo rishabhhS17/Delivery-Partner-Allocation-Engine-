@@ -6,7 +6,9 @@ import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
 // How often the dispatcher looks for PENDING orders it has not heard about — ones created
 // through another instance during a deploy, or by a script.
 const PENDING_SYNC_EVERY_MS = 5_000;
-import { _cancelExpiredOrders, _chooseAssignment, _commitAssignment } from './dispatch.js';
+import {
+  _cancelExpiredOrders, _chooseAssignment, _commitAssignment, _cancelOrderAfterEngineError,
+} from './dispatch.js';
 
 // ─── Dispatch loop ───────────────────────────────────────────────────────────
 // One dispatch round about every second. A round awaits its database writes (an assignment is
@@ -28,8 +30,10 @@ export function startDispatchLoop() {
     if (!runtime.running) return;
     runtime.dispatchTimer = setTimeout(() => {
       runExclusive(runDispatchRound)
-        .catch(err => console.error('[engine] dispatch round failed:', err))
-        .finally(scheduleNextRound);
+        .then(scheduleNextRound)
+        // An error not tied to one order means the engine's own state can't be trusted: rethrow
+        // so the process exits and Render restarts it from the database (decision E1).
+        .catch(err => setImmediate(() => { throw err; }));
     }, TICK_INTERVAL_MS);
   };
   scheduleNextRound();
@@ -80,7 +84,13 @@ async function runDispatchRound() {
   // Phase 2 — allocate pending orders (marginal-cost clubbing + JIT hold + force-assign)
   for (const [orderId, order] of [...pendingQueue]) {
     if (!pendingQueue.has(orderId)) continue;
-    const decision = _chooseAssignment(orderId, order, Date.now());
+    let decision;
+    try {
+      decision = _chooseAssignment(orderId, order, Date.now());
+    } catch (err) {
+      await _cancelOrderAfterEngineError(orderId, order, err);
+      continue;
+    }
     if (decision) await _commitAssignment(decision);
   }
 }

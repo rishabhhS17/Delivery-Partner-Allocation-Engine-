@@ -19,10 +19,16 @@ const STATUS_MAP = {
   },
 };
 
-export default function StatusBadge({ kind, status }) {
+const CANCEL_REASON_LABELS = {
+  no_rider:     'no rider',
+  engine_error: 'engine error',
+};
+
+export default function StatusBadge({ kind, status, cancelReason }) {
   const entry = STATUS_MAP[kind]?.[status];
   const color = entry?.color ?? 'faint';
-  const label = entry?.label ?? status ?? 'Unknown';
+  const reason = status === 'CANCELLED' ? CANCEL_REASON_LABELS[cancelReason] : null;
+  const label = `${entry?.label ?? status ?? 'Unknown'}${reason ? ` · ${reason}` : ''}`;
   const Icon = entry?.icon;
 
   return (

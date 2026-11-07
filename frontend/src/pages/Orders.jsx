@@ -190,7 +190,7 @@ export default function Orders() {
               <TableRow key={o._id}>
                 <TableCell>{o.restaurantName}</TableCell>
                 <TableCell>{o.customerName}</TableCell>
-                <TableCell><StatusBadge kind="order" status={o.status} /></TableCell>
+                <TableCell><StatusBadge kind="order" status={o.status} cancelReason={o.cancelReason} /></TableCell>
                 <TableCell>{o.assignedRiderId?.name ?? '—'}</TableCell>
                 <TableCell>{o.createdAt ? new Date(o.createdAt).toLocaleString() : '—'}</TableCell>
                 <TableCell>

@@ -32,7 +32,7 @@ export async function _cancelExpiredOrders(now) {
 
     let isCancelled;
     try {
-      isCancelled = await saveCancellation(order._id, now);
+      isCancelled = await saveCancellation(order._id, now, 'no_rider');
     } catch (err) {
       console.error('[engine] TTL cancel write failed, will retry:', err.message);
       continue;
@@ -43,6 +43,22 @@ export async function _cancelExpiredOrders(now) {
     publish('order:cancelled', { orderId, reason: 'no_rider' });
     console.warn('[engine] order TTL expired → CANCELLED', orderId);
   }
+}
+
+// An order that made dispatch throw is cancelled with reason 'engine_error' instead of being
+// retried: retrying would throw again every round (and after a restart), so one bad order could
+// otherwise stall dispatch for the whole city (decision E5, amended 2026-11-07).
+export async function _cancelOrderAfterEngineError(orderId, order, err) {
+  console.error('[engine] dispatch failed for order', orderId, '— cancelling it:', err);
+  pendingQueue.delete(orderId);
+  try {
+    if (!(await saveCancellation(order._id, Date.now(), 'engine_error'))) return;
+  } catch (saveErr) {
+    console.error('[engine] could not save the engine_error cancellation:', saveErr.message);
+    return; // the order is still PENDING in the database and will be retried after a restart
+  }
+  appendOrderEvent(order._id, 'cancelled', { details: { reason: 'engine_error', error: String(err?.message ?? err) } });
+  publish('order:cancelled', { orderId, reason: 'engine_error' });
 }
 
 // Busy-rider clubbing gate: B's restaurant near the rider's path, and B's drop near an existing
