@@ -34,7 +34,23 @@ const log = createLogger('engine');
  * @property {number} lat  Current position as the engine last heard it.
  * @property {number} lng
  * @property {number|null} waitingUntil  Epoch ms the food is ready (WAITING riders only).
+ * @property {StopRef|null} nextStop  The stop the rider is heading to or waiting at.
  * @property {RiderLeg|null} leg  The leg toward the next stop; null when there is nothing to do.
+ */
+
+/**
+ * Which stop a rider report is about, so a repeated report can be recognised.
+ * @typedef {Object} StopRef
+ * @property {string} orderId
+ * @property {'PICKUP'|'DROP'} type
+ */
+
+/**
+ * What a stop report did.
+ * @typedef {'done'|'already_done'|'ignored'} StopReportResult
+ *   done: applied now · already_done: a repeat of a report already applied (no change) ·
+ *   ignored: not applied — not this rider's current stop, another report for the rider is still
+ *   in flight, or the save failed; report again
  */
 
 /**
@@ -194,6 +210,7 @@ export function getRiderTasks() {
       lat:          rider.lat,
       lng:          rider.lng,
       waitingUntil: rider.status === 'WAITING' ? (rider.waitingUntil ?? 0) : null,
+      nextStop:     head ? { orderId: head.orderId.toString(), type: head.type } : null,
       leg: hasLeg ? {
         originLat:   rider.legOriginLat,
         originLng:   rider.legOriginLng,
@@ -221,30 +238,54 @@ export function reportRiderPosition(riderId, lat, lng, segmentIdx = 0) {
   _reindexIfBucketed(riderId, rider);
 }
 
+// Has this stop already been completed? A pickup is done once the food is on board (or the
+// order is gone from the rider because it was delivered); a drop once the order is gone.
+function isStopAlreadyDone(rider, stop) {
+  const meta = rider.orders.get(stop.orderId);
+  return stop.type === 'PICKUP' ? !meta || meta.pickedUp : !meta;
+}
+
 // A stop report changes the rider's itinerary, so it waits its turn behind dispatch (an
-// assignment never interleaves with a pickup or delivery). Only one report per rider is in
-// flight; a bot reporting again meanwhile is ignored and simply reports again next tick.
-function reportStop(riderId, isExpectedState, handle) {
+// assignment never interleaves with a pickup or delivery). Reports name their stop: a repeat of
+// one already applied (a phone retrying a request) is a no-op success (decision E1). Only one
+// report per rider is in flight; a bot reporting again meanwhile is ignored and simply reports
+// again next tick.
+function reportStop(riderId, stop, isExpectedState, handle) {
   const rider = riderState.get(riderId);
-  if (!rider?.stops[0] || rider.isReportingStop || !isExpectedState(rider)) return Promise.resolve();
+  if (!rider) return Promise.resolve('ignored');
+  if (isStopAlreadyDone(rider, stop)) return Promise.resolve('already_done');
+  if (rider.isReportingStop) return Promise.resolve('ignored');
   rider.isReportingStop = true;
   return runExclusive(async () => {
+    if (isStopAlreadyDone(rider, stop)) return 'already_done';
     const head = rider.stops[0];
-    if (!head || !isExpectedState(rider)) return;
+    const isHeadStop = head && String(head.orderId) === stop.orderId && head.type === stop.type;
+    if (!isHeadStop || !isExpectedState(rider)) return 'ignored';
     rider.lat = head.lat;
     rider.lng = head.lng;
     await handle(rider);
+    return isStopAlreadyDone(rider, stop) || rider.status === 'WAITING' ? 'done' : 'ignored';
   }).finally(() => { rider.isReportingStop = false; });
 }
 
-/** A rider reached their next stop (restaurant or customer). */
-export function riderArrived(riderId) {
-  return reportStop(riderId, rider => rider.status !== 'WAITING',
+/**
+ * A rider reached a stop (restaurant or customer).
+ * @param {string} riderId
+ * @param {StopRef} stop
+ * @returns {Promise<StopReportResult>}
+ */
+export function riderArrived(riderId, stop) {
+  return reportStop(riderId, stop, rider => rider.status !== 'WAITING',
     rider => _arriveAtStop(riderId, rider, Date.now()));
 }
 
-/** A rider waiting at the restaurant collected the food. */
-export function riderCollectedFood(riderId) {
-  return reportStop(riderId, rider => rider.status === 'WAITING',
+/**
+ * A rider waiting at the restaurant collected the food for an order.
+ * @param {string} riderId
+ * @param {string} orderId
+ * @returns {Promise<StopReportResult>}
+ */
+export function riderCollectedFood(riderId, orderId) {
+  return reportStop(riderId, { orderId: String(orderId), type: 'PICKUP' }, rider => rider.status === 'WAITING',
     rider => _completePickup(riderId, rider, Date.now()));
 }

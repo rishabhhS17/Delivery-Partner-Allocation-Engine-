@@ -46,7 +46,7 @@ function moveEachRider() {
   const now = Date.now();
   for (const task of getRiderTasks()) {
     if (task.status === 'WAITING') {
-      if (now >= task.waitingUntil) riderCollectedFood(task.riderId);
+      if (now >= task.waitingUntil) riderCollectedFood(task.riderId, task.nextStop.orderId);
       continue;
     }
     if (!task.leg) continue; // idle: stays where they are
@@ -54,6 +54,6 @@ function moveEachRider() {
     const metresTravelled = RIDER_SPEED_METRES_PER_SECOND * (now - task.leg.startedAtMs) / 1000;
     const position = positionAlongLeg(task.leg, metresTravelled);
     reportRiderPosition(task.riderId, position.lat, position.lng, position.segmentIdx);
-    if (position.isComplete) riderArrived(task.riderId);
+    if (position.isComplete) riderArrived(task.riderId, task.nextStop);
   }
 }

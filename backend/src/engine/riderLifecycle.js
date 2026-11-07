@@ -54,8 +54,9 @@ export async function _completePickup(riderId, rider, now) {
   const savedArrivalMs = meta?.riderArrivedAt ? new Date(meta.riderArrivedAt).getTime() : null;
   const arrivedAtMs = rider.pickupArrivalAt ?? savedArrivalMs;
   const actualWait_s = arrivedAtMs ? Math.round((now - arrivedAtMs) / 1000) : 0;
+  let isFirstReport;
   try {
-    await savePickup(head.orderId, now, actualWait_s);
+    isFirstReport = await savePickup(head.orderId, now, actualWait_s);
   } catch (err) {
     log.error('pickup write failed, rider will report again', { orderId: oid, riderId, error: err.message });
     return;
@@ -66,8 +67,10 @@ export async function _completePickup(riderId, rider, now) {
   rider.waitingUntil    = null;
   rider.pickupArrivalAt = null;
 
-  appendOrderEvent(head.orderId, 'picked_up', { riderId: rider._id, details: { actualWait_s } });
-  publish('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
+  if (isFirstReport) {
+    appendOrderEvent(head.orderId, 'picked_up', { riderId: rider._id, details: { actualWait_s } });
+    publish('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
+  }
 
   _beginLegToHead(rider, now, riderId);
 }
@@ -75,8 +78,9 @@ export async function _completePickup(riderId, rider, now) {
 async function _completeDrop(riderId, rider, now) {
   const head = rider.stops[0];
   const oid  = head.orderId.toString();
+  let isFirstReport;
   try {
-    await saveDelivery(head.orderId, now);
+    isFirstReport = await saveDelivery(head.orderId, now);
   } catch (err) {
     log.error('delivery write failed, rider will report again', { orderId: oid, riderId, error: err.message });
     return;
@@ -87,8 +91,10 @@ async function _completeDrop(riderId, rider, now) {
   activeRoutes.delete(oid);
   rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
 
-  appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
-  publish('order:delivered', { orderId: oid, riderId: riderId.toString() });
+  if (isFirstReport) {
+    appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
+    publish('order:delivered', { orderId: oid, riderId: riderId.toString() });
+  }
 
   _syncIndex(riderId, rider);   // a slot just freed → ensure indexed
   _beginLegToHead(rider, now, riderId);

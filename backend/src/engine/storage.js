@@ -102,14 +102,28 @@ export function saveRiderArrivedAtRestaurant(orderId, now) {
   return Order.updateOne({ _id: orderId, riderArrivedAt: null }, { $set: { riderArrivedAt: new Date(now) } });
 }
 
-export function savePickup(orderId, now, actualWait_s) {
-  return Order.findByIdAndUpdate(orderId, {
-    status: 'PICKED_UP', pickedUpAt: new Date(now), actualWait_s,
-  });
+/**
+ * Only an ASSIGNED order can be picked up, so a repeated report changes nothing.
+ * @returns {Promise<boolean>} true when this call saved the pickup, false when it was already saved.
+ */
+export async function savePickup(orderId, now, actualWait_s) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'ASSIGNED' },
+    { $set: { status: 'PICKED_UP', pickedUpAt: new Date(now), actualWait_s } }
+  );
+  return modifiedCount === 1;
 }
 
-export function saveDelivery(orderId, now) {
-  return Order.findByIdAndUpdate(orderId, { status: 'DELIVERED', deliveredAt: new Date(now), ...CLEARED_ROUTE_FIELDS });
+/**
+ * Only a PICKED_UP order can be delivered, so a repeated report changes nothing.
+ * @returns {Promise<boolean>} true when this call saved the delivery, false when it was already saved.
+ */
+export async function saveDelivery(orderId, now) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'PICKED_UP' },
+    { $set: { status: 'DELIVERED', deliveredAt: new Date(now), ...CLEARED_ROUTE_FIELDS } }
+  );
+  return modifiedCount === 1;
 }
 
 /**
