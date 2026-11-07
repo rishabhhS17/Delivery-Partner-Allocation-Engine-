@@ -8,7 +8,7 @@ import { getH3Config, MAX_PENDING_ORDERS } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, runtime } from './state.js';
 import { _reindexIfBucketed } from './h3Index.js';
-import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
+import { _arriveAtStop, _completePickup, _dropOrderFromRider } from './riderLifecycle.js';
 import { _chooseAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
 import {
@@ -22,7 +22,7 @@ import { enqueueOrder, scheduleWake } from './wakeList.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
-import { saveFinalPositions, appendOrderEvent, clearOffer } from './storage.js';
+import { saveFinalPositions, appendOrderEvent, clearOffer, saveRiderCancellation, loadOrder } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -227,6 +227,42 @@ export function acceptOffer(riderId, orderId) {
  */
 export function rejectOffer(riderId, orderId) {
   return runExclusive(() => _rejectOffer(String(riderId), String(orderId)));
+}
+
+/**
+ * The rider cancels an order they accepted — allowed only before pickup (decision G2). The order
+ * goes straight back to dispatch, and this rider is not offered it again.
+ * @returns {Promise<'cancelled'|'not_allowed'|'failed'>}
+ *   not_allowed: already picked up, or not this rider's order · failed: the save failed, try again
+ */
+export function riderCancelledOrder(riderId, orderId) {
+  return runExclusive(async () => {
+    const id = String(riderId);
+    const oid = String(orderId);
+    const rider = riderState.get(id);
+    const meta = rider?.orders.get(oid);
+    if (!meta || meta.pickedUp) return 'not_allowed';
+    const now = Date.now();
+    let isSaved;
+    try {
+      isSaved = await saveRiderCancellation(meta._id, rider._id, now);
+    } catch (err) {
+      log.error('rider cancellation write failed', { orderId: oid, riderId: id, error: err.message });
+      return 'failed';
+    }
+    if (!isSaved) return 'not_allowed';
+
+    _dropOrderFromRider(id, rider, oid, now);
+    appendOrderEvent(meta._id, 'rider_cancelled', { riderId: rider._id });
+    publish('order:rider_cancelled', { orderId: oid, riderId: id, riderName: rider.name });
+    log.info('rider cancelled before pickup, order back in dispatch', { orderId: oid, riderId: id });
+    const order = await loadOrder(meta._id).catch(() => null);
+    if (order) {
+      enqueueOrder(order, now);
+      scheduleWake(oid, now); // look for another rider at once
+    } // else the PENDING order is picked up by the pending-order sync within seconds
+    return 'cancelled';
+  });
 }
 
 function riderOfOpenOffer(orderId) {

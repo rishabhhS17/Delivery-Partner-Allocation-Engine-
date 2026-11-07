@@ -204,6 +204,19 @@ export function _fetchHeadRoute(rider, riderId) {
   }).catch(err => log.warn('route fetch failed, using straight-line fallback', { orderId: orderIdStr, riderId, error: err.message }));
 }
 
+/** Remove a not-yet-picked-up order from the rider's stops and send them on to what is next. */
+export function _dropOrderFromRider(riderId, rider, orderId, now) {
+  const wasHeadingToIt = rider.stops[0] && String(rider.stops[0].orderId) === orderId;
+  rider.stops = rider.stops.filter(stop => String(stop.orderId) !== orderId);
+  rider.orders.delete(orderId);
+  activeRoutes.delete(orderId);
+  rider.nextLegCoords = [];
+  _syncIndex(riderId, rider);
+  // Heading to (or waiting at) the dropped order's restaurant: start the leg to the next stop
+  // from here, or go idle. Otherwise the current leg is unaffected.
+  if (wasHeadingToIt || rider.status === 'WAITING' || !rider.stops.length) _beginLegToHead(rider, now, riderId);
+}
+
 /**
  * Apply a rider going online or offline (already saved). Must run inside the dispatch line.
  * Online: they join the live fleet. Offline: no new orders; idle → leave the fleet at once,

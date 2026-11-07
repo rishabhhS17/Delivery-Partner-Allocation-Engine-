@@ -32,9 +32,10 @@ export async function _cancelExpiredOrders(now) {
   const cancelledOrderIds = [];
   const ttlCutoff = now - getOrderTtl();
   for (const [orderId, order] of [...pendingQueue]) {
-    const dispatchableMs = order.prepReadyAt
-      ? new Date(order.prepReadyAt).getTime()
-      : ((order.queuedAt ?? order.createdAt)?.getTime?.() ?? now);
+    // Dispatchable from when the food is ready or when it (re)entered the queue, whichever is
+    // later — so an order a rider gave back gets a fresh window to find another rider.
+    const queuedMs = new Date(order.queuedAt ?? order.createdAt ?? now).getTime();
+    const dispatchableMs = Math.max(order.prepReadyAt ? new Date(order.prepReadyAt).getTime() : 0, queuedMs);
     if (dispatchableMs > ttlCutoff) continue;
 
     let isCancelled;

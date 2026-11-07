@@ -126,6 +126,26 @@ export async function saveDelivery(orderId, now) {
   return modifiedCount === 1;
 }
 
+/**
+ * The rider gives an order back before pickup: only an ASSIGNED order still with that rider is
+ * returned to PENDING, and the rider is remembered so they are not offered it again.
+ * @returns {Promise<boolean>} true when saved, false when the order had already moved on.
+ */
+export async function saveRiderCancellation(orderId, riderId, now) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'ASSIGNED', assignedRiderId: riderId },
+    {
+      $set: { status: 'PENDING', assignedRiderId: null, assignedAt: null, queuedAt: new Date(now), riderArrivedAt: null },
+      $addToSet: { rejectedRiderIds: riderId },
+    }
+  );
+  return modifiedCount === 1;
+}
+
+export function loadOrder(orderId) {
+  return Order.findById(orderId);
+}
+
 /** First dispatch attempt only: a later one (or one after a restart) keeps the original time. */
 export function saveDispatchStarted(orderId, now) {
   return Order.updateOne({ _id: orderId, dispatchStartedAt: null }, { $set: { dispatchStartedAt: new Date(now) } });
