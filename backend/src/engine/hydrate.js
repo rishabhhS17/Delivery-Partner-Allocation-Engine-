@@ -131,6 +131,8 @@ export function _buildEntry(rider) {
     status:  rider.status,
     availabilityStatus: rider.availabilityStatus,
     deliveryTimestamps: rider.deliveryTimestamps ?? [],
+    // Older records only have the list, which used to hold every delivery.
+    totalDeliveries: rider.totalDeliveries || (rider.deliveryTimestamps?.length ?? 0),
 
     // Multi-order itinerary
     stops:   [],                 // [{ type, orderId, lat, lng, prepReadyAt?, promisedBy? }, …]

@@ -4,7 +4,7 @@
 // customers' apps, so they may report what happened, never reach into engine state.
 
 import { latLngToCell } from 'h3-js';
-import { getH3Config } from '../config/constants.js';
+import { getH3Config, MAX_PENDING_ORDERS } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, runtime } from './state.js';
 import { _reindexIfBucketed, _syncIndex } from './h3Index.js';
@@ -138,11 +138,22 @@ export function addPendingOrder(order) {
   });
 }
 
+/** False once MAX_PENDING_ORDERS orders are waiting: new orders are refused until it drains. */
+export function canAcceptOrders(count = 1) {
+  return pendingQueue.size + count <= MAX_PENDING_ORDERS;
+}
+
 /**
  * Create an order (random customer + restaurant pair unless both ids are given) and queue it.
+ * Throws an error with statusCode 503 when the queue is full (see canAcceptOrders).
  * @param {{ customerId?: string, restaurantId?: string }} [request]
  */
 export async function placeOrder(request = {}) {
+  if (!canAcceptOrders()) {
+    const err = new Error('Too many orders are waiting for a rider — try again shortly');
+    err.statusCode = 503;
+    throw err;
+  }
   const order = await createOrder(request);
   addPendingOrder(order);
   return order;

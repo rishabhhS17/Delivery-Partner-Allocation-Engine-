@@ -36,6 +36,11 @@ export const MAX_SCORED_CANDIDATES = 50;
 // An order with no rider in range is looked at again after these delays (then every 10 s).
 export const NO_RIDER_RETRY_DELAYS_MS = [1000, 2000, 4000, 10_000];
 
+// Memory bounds, so nothing grows without limit under load (decision E1).
+// Past this many waiting orders, new orders are refused with "try again shortly" — a safety
+// limit far above Ranchi's normal queue (a few hundred at peak), not an overload policy.
+export const MAX_PENDING_ORDERS = 5000;
+
 // Stage 3 — capped interleaved clubbing (Model A) + anti-starvation.
 export const CLUBBING_CAP                   = 2;    // N-general ceiling; nothing hardcoded to 2
 export const CLUBBING_RESTAURANT_RADIUS_KM  = 1.5;  // B's restaurant near the rider's path

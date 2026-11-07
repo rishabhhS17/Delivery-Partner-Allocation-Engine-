@@ -11,7 +11,10 @@ const RiderSchema = new mongoose.Schema(
     status:             { type: String, required: true, enum: ['IDLE', 'ACCEPTED', 'WAITING', 'PICKED_UP'], default: 'IDLE' },
     // Which orders a rider carries is stored only on the Order (assignedRiderId), never here,
     // so the two can never disagree (decision E2).
+    // Only the last LOAD_WINDOW_MINUTES are kept (all the load score needs); the lifetime count
+    // lives in totalDeliveries so the list stays small.
     deliveryTimestamps: { type: [Date], default: [] },
+    totalDeliveries:    { type: Number, default: 0 },
     // The leg the rider is on right now. Position is never saved per tick: it is rebuilt from
     // this leg and the clock (decision B5). null when idle.
     currentLeg: {

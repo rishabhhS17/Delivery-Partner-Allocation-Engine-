@@ -29,7 +29,7 @@ const serializeRider = (rider, currentOrder = null) => {
     lng: longitude,
     currentOrderId: currentOrder?._id ?? null,
     currentOrderSummary,
-    totalOrders: deliveryTimestamps.length,
+    totalOrders: rest.totalDeliveries || deliveryTimestamps.length,
     ordersLastHour: deliveryTimestamps.filter((t) => new Date(t).getTime() > oneHourAgo).length,
   };
 };

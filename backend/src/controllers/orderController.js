@@ -1,6 +1,6 @@
 import Order from '../models/Order.js';
 import { bulkCreateOrders } from '../services/orderGenerator.js';
-import { addPendingOrder, placeOrder } from '../engine/index.js';
+import { addPendingOrder, placeOrder, canAcceptOrders } from '../engine/index.js';
 
 // In-memory idempotency cache — prevents duplicate orders from slow-network retries.
 // Keys expire after 60 s; the Map is pruned on each write (bounded by request rate).
@@ -31,6 +31,7 @@ export const createSingleOrder = async (req, res, next) => {
     const order = await placeOrder({ customerId, restaurantId });
     res.status(201).json({ success: true, data: order });
   } catch (err) {
+    if (err.statusCode) res.status(err.statusCode);
     next(err);
   }
 };
@@ -44,6 +45,10 @@ export const createBulkOrders = async (req, res, next) => {
     if (!count || count < 1 || count > 100) {
       res.status(400);
       throw new Error('count must be a number between 1 and 100');
+    }
+    if (!canAcceptOrders(count)) {
+      res.status(503);
+      throw new Error('Too many orders are waiting for a rider — try again shortly');
     }
     const orders = await bulkCreateOrders(count);
     orders.forEach(addPendingOrder);

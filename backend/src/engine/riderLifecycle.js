@@ -1,6 +1,6 @@
 import { latLngToCell } from 'h3-js';
 import { getRoute } from '../services/routingService.js';
-import { getH3Config } from '../config/constants.js';
+import { getH3Config, LOAD_WINDOW_MINUTES } from '../config/constants.js';
 import { riderState, activeRoutes } from './state.js';
 import { _syncIndex } from './h3Index.js';
 import { publish } from './broadcast.js';
@@ -89,7 +89,9 @@ async function _completeDrop(riderId, rider, now) {
   rider.stops.splice(rider.stops.indexOf(head), 1); // remove this DROP
   rider.orders.delete(oid);
   activeRoutes.delete(oid);
-  rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
+  const loadWindowStart = now - LOAD_WINDOW_MINUTES * 60_000;
+  rider.deliveryTimestamps = [...rider.deliveryTimestamps.filter(t => new Date(t).getTime() > loadWindowStart), new Date(now)];
+  rider.totalDeliveries = (rider.totalDeliveries ?? 0) + 1;
 
   if (isFirstReport) {
     appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
@@ -159,6 +161,7 @@ function _goIdle(rider, now, riderId) {
     longitude:       rider.lng,
     h3Index:         rider.h3Index,
     deliveryTimestamps: rider.deliveryTimestamps,
+    totalDeliveries: rider.totalDeliveries,
     currentLeg:      null,
   }).catch(err => log.error('idle write failed', { riderId, error: err.message }));
 }

@@ -18,6 +18,10 @@ const _queue = [];
 // assignment. Keys expire after ROUTE_CACHE_TTL_MS; pruned opportunistically on each write,
 // matching orderController.js's `_isDuplicate` idempotency-cache pattern.
 const ROUTE_CACHE_TTL_MS = 5 * 60 * 1000;
+// Memory bounds (decision E1): the oldest cached route is evicted past this many, and a route
+// request that would queue behind this many is refused (the rider moves in a straight line).
+const MAX_CACHED_ROUTES = 2000;
+const MAX_QUEUED_ROUTE_REQUESTS = 500;
 const _routeCache = new Map(); // key -> { route, expiresAt }
 let _cacheHits = 0;
 let _cacheMisses = 0;
@@ -110,10 +114,15 @@ export function getRoute(riderCoords, restaurantCoords, customerCoords) {
   _cacheMisses++;
   _logCacheStats();
 
+  if (_queue.length >= MAX_QUEUED_ROUTE_REQUESTS) {
+    return Promise.reject(new Error('route request queue is full'));
+  }
+
   return new Promise((resolve, reject) => {
     _queue.push({
       resolve: (route) => {
         _pruneRouteCache();
+        if (_routeCache.size >= MAX_CACHED_ROUTES) _routeCache.delete(_routeCache.keys().next().value); // oldest first
         _routeCache.set(key, { route, expiresAt: Date.now() + ROUTE_CACHE_TTL_MS });
         resolve(route);
       },
