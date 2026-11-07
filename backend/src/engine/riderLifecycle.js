@@ -13,7 +13,10 @@ import {
 // started, when, and the road route) — see utils/polyline.js. The leg is saved on the Rider, so
 // after a restart the same position is rebuilt from the clock (decision B5).
 
-export function _arriveAtStop(riderId, rider, now) {
+// Stop reports run one at a time with dispatch (see index.js), and each pickup / delivery is
+// saved before it is applied: if the save fails the rider simply stays at the stop and the bot
+// reports again next tick.
+export async function _arriveAtStop(riderId, rider, now) {
   const head = rider.stops[0];
   if (!head) { _goIdle(rider, now, riderId); return; }
 
@@ -28,40 +31,51 @@ export function _arriveAtStop(riderId, rider, now) {
       saveRiderState(riderId, { status: 'WAITING' }).catch(() => {});
       appendOrderEvent(head.orderId, 'rider_waiting', { riderId: rider._id, details: { foodReadyAt: new Date(readyMs) } });
     } else {
-      _completePickup(riderId, rider, now);
+      await _completePickup(riderId, rider, now);
     }
   } else {
-    _completeDrop(riderId, rider, now);
+    await _completeDrop(riderId, rider, now);
   }
 }
 
-export function _completePickup(riderId, rider, now) {
-  const head = rider.stops.shift();               // remove the PICKUP
+export async function _completePickup(riderId, rider, now) {
+  const head = rider.stops[0];
   const oid  = head.orderId.toString();
+  const actualWait_s = rider.pickupArrivalAt ? Math.round((now - rider.pickupArrivalAt) / 1000) : 0;
+  try {
+    await savePickup(head.orderId, now, actualWait_s);
+  } catch (err) {
+    console.error('[engine] pickup write failed, rider will report again:', err.message);
+    return;
+  }
+
+  rider.stops.splice(rider.stops.indexOf(head), 1); // remove this PICKUP
   const meta = rider.orders.get(oid);
   if (meta) meta.pickedUp = true;
-
-  const actualWait_s = rider.pickupArrivalAt ? Math.round((now - rider.pickupArrivalAt) / 1000) : 0;
   rider.waitingUntil    = null;
   rider.pickupArrivalAt = null;
 
-  savePickup(head.orderId, now, actualWait_s)
-    .catch(err => console.error('[engine] pickup write failed:', err.message));
   appendOrderEvent(head.orderId, 'picked_up', { riderId: rider._id, details: { actualWait_s } });
   publish('order:status', { orderId: oid, status: 'PICKED_UP', riderId: riderId.toString() });
 
   _beginLegToHead(rider, now, riderId);
 }
 
-function _completeDrop(riderId, rider, now) {
-  const head = rider.stops.shift();               // remove the DROP
+async function _completeDrop(riderId, rider, now) {
+  const head = rider.stops[0];
   const oid  = head.orderId.toString();
+  try {
+    await saveDelivery(head.orderId, now);
+  } catch (err) {
+    console.error('[engine] delivery write failed, rider will report again:', err.message);
+    return;
+  }
+
+  rider.stops.splice(rider.stops.indexOf(head), 1); // remove this DROP
   rider.orders.delete(oid);
   activeRoutes.delete(oid);
   rider.deliveryTimestamps = [...rider.deliveryTimestamps, new Date(now)];
 
-  saveDelivery(head.orderId, now)
-    .catch(err => console.error('[engine] delivered write failed:', err.message));
   appendOrderEvent(head.orderId, 'delivered', { riderId: rider._id });
   publish('order:delivered', { orderId: oid, riderId: riderId.toString() });
 

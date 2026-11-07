@@ -173,22 +173,30 @@ export function reportRiderPosition(riderId, lat, lng, segmentIdx = 0) {
   _reindexIfBucketed(riderId, rider);
 }
 
+// A stop report changes the rider's itinerary, so it waits its turn behind dispatch (an
+// assignment never interleaves with a pickup or delivery). Only one report per rider is in
+// flight; a bot reporting again meanwhile is ignored and simply reports again next tick.
+function reportStop(riderId, isExpectedState, handle) {
+  const rider = riderState.get(riderId);
+  if (!rider?.stops[0] || rider.isReportingStop || !isExpectedState(rider)) return Promise.resolve();
+  rider.isReportingStop = true;
+  return runExclusive(async () => {
+    const head = rider.stops[0];
+    if (!head || !isExpectedState(rider)) return;
+    rider.lat = head.lat;
+    rider.lng = head.lng;
+    await handle(rider);
+  }).finally(() => { rider.isReportingStop = false; });
+}
+
 /** A rider reached their next stop (restaurant or customer). */
 export function riderArrived(riderId) {
-  const rider = riderState.get(riderId);
-  const head = rider?.stops[0];
-  if (!head || rider.status === 'WAITING') return;
-  rider.lat = head.lat;
-  rider.lng = head.lng;
-  _arriveAtStop(riderId, rider, Date.now());
+  return reportStop(riderId, rider => rider.status !== 'WAITING',
+    rider => _arriveAtStop(riderId, rider, Date.now()));
 }
 
 /** A rider waiting at the restaurant collected the food. */
 export function riderCollectedFood(riderId) {
-  const rider = riderState.get(riderId);
-  const head = rider?.stops[0];
-  if (!head || rider.status !== 'WAITING') return;
-  rider.lat = head.lat;
-  rider.lng = head.lng;
-  _completePickup(riderId, rider, Date.now());
+  return reportStop(riderId, rider => rider.status === 'WAITING',
+    rider => _completePickup(riderId, rider, Date.now()));
 }

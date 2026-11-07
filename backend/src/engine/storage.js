@@ -11,7 +11,14 @@ import Order from '../models/Order.js';
 import AllocationHistory from '../models/AllocationHistory.js';
 import OrderEvent from '../models/OrderEvent.js';
 
+import mongoose from 'mongoose';
+
 const ACTIVE_ORDER_STATUSES = ['ASSIGNED', 'PICKED_UP'];
+
+/** True while the database connection is up. The engine makes no decision it cannot save. */
+export function isDatabaseAvailable() {
+  return mongoose.connection.readyState === 1;
+}
 
 // ─── Startup reads ───────────────────────────────────────────────────────────
 

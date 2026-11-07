@@ -13,4 +13,5 @@ export const runtime = {
   dispatchTimer:  null,
   broadcastTimer: null,
   running:   false,
+  isDispatchPaused: false,
 };

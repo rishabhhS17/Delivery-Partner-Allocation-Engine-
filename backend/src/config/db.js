@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 import { config } from './env.js';
 
+// Without buffering, a query made while the database is unreachable fails at once instead of
+// waiting up to 10 s, so the engine can notice the outage and pause (decision E3).
+mongoose.set('bufferCommands', false);
+
 const connectDB = async () => {
   try {
     if (!config.mongoUri) {

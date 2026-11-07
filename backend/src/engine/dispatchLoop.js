@@ -1,6 +1,7 @@
 import { TICK_INTERVAL_MS } from '../config/constants.js';
 import { pendingQueue, runtime } from './state.js';
 import { publish, buildFleetSnapshot } from './broadcast.js';
+import { isDatabaseAvailable } from './storage.js';
 import { _cancelExpiredOrders, _chooseAssignment, _commitAssignment } from './dispatch.js';
 
 // ─── Dispatch loop ───────────────────────────────────────────────────────────
@@ -38,6 +39,22 @@ export function stopLoops() {
 }
 
 async function runDispatchRound() {
+  // No decision is made unless it can be saved: while the database is down, dispatch pauses.
+  // Rider movement and the live stream carry on; dispatch resumes on its own (decision E3).
+  if (!isDatabaseAvailable()) {
+    if (!runtime.isDispatchPaused) {
+      runtime.isDispatchPaused = true;
+      console.warn('[engine] database unavailable — dispatch paused');
+      publish('simulation:status', { running: runtime.running, dispatchPaused: true });
+    }
+    return;
+  }
+  if (runtime.isDispatchPaused) {
+    runtime.isDispatchPaused = false;
+    console.log('[engine] database back — dispatch resumed');
+    publish('simulation:status', { running: runtime.running, dispatchPaused: false });
+  }
+
   // Phase 1 — drop orders that waited too long after becoming dispatchable.
   await _cancelExpiredOrders(Date.now());
 
