@@ -61,6 +61,10 @@ export function loadRidersForStartup(carrierIds) {
   return Rider.find({ $or: [{ availabilityStatus: 'ONLINE' }, { _id: { $in: carrierIds } }] });
 }
 
+export function loadRider(riderId) {
+  return Rider.findById(riderId);
+}
+
 /** Put orders whose rider no longer exists back in the queue. */
 export function requeueOrders(orderIds, now) {
   return Order.updateMany(

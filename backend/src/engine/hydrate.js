@@ -119,7 +119,7 @@ function _restoreLeg(entry, savedLeg, now) {
   return true;
 }
 
-function _buildEntry(rider) {
+export function _buildEntry(rider) {
   return {
     _id:     rider._id,
     name:    rider.name,

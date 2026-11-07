@@ -136,6 +136,8 @@ function _goIdle(rider, now, riderId) {
   rider.waitingUntil = null; rider.pickupArrivalAt = null;
 
   _syncIndex(riderId, rider); // free slot → (re)index where they are
+  // A rider switched offline while busy leaves the live fleet once their last order is done.
+  if (rider.availabilityStatus !== 'ONLINE') riderState.delete(riderId.toString());
 
   saveRiderState(riderId, {
     status:          'IDLE',

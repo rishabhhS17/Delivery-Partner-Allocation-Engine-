@@ -2,6 +2,7 @@ import { latLngToCell } from 'h3-js';
 import { getH3Config } from '../config/constants.js';
 import Rider from '../models/Rider.js';
 import Order from '../models/Order.js';
+import { setRiderAvailability } from '../engine/index.js';
 import {
   validateRiderCreate,
   validateLocationUpdate,
@@ -128,6 +129,7 @@ export const updateStatus = async (req, res, next) => {
       { new: true, runValidators: true }
     );
     if (!rider) { res.status(404); throw new Error('Rider not found'); }
+    await setRiderAvailability(rider._id, availabilityStatus); // reaches the live engine at once
 
     res.json({ success: true, data: serializeRider(rider) });
   } catch (err) {

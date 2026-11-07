@@ -7,10 +7,10 @@ import { latLngToCell } from 'h3-js';
 import { getH3Config } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, runtime } from './state.js';
-import { _reindexIfBucketed } from './h3Index.js';
+import { _reindexIfBucketed, _syncIndex } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment, _commitAssignment } from './dispatch.js';
-import { hydrate } from './hydrate.js';
+import { hydrate, _buildEntry } from './hydrate.js';
 import {
   runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
 } from './dispatchLoop.js';
@@ -19,7 +19,7 @@ import { getEngineHealth } from './health.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
-import { saveFinalPositions, appendOrderEvent } from './storage.js';
+import { saveFinalPositions, appendOrderEvent, loadRider } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -148,6 +148,34 @@ export function dispatchNow(orderId) {
     if (assignment) return { status: 'assigned', orderId: id, ...assignment };
     // The save may have found the order already changed and dropped it from the queue.
     return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };
+  });
+}
+
+// ─── Rider availability ──────────────────────────────────────────────────────
+
+/**
+ * A rider went online or offline (already saved to the database). Online: they join the live
+ * fleet and can be offered orders at once. Offline: they get no new orders; an idle rider leaves
+ * the fleet at once, a busy one finishes what they carry first.
+ * @param {string} riderId
+ * @param {'ONLINE'|'OFFLINE'} availabilityStatus
+ */
+export function setRiderAvailability(riderId, availabilityStatus) {
+  if (!runtime.running) return Promise.resolve(); // not the dispatcher: it loads riders at startup
+  const id = riderId.toString();
+  return runExclusive(async () => {
+    let rider = riderState.get(id);
+    if (availabilityStatus === 'ONLINE' && !rider) {
+      const riderDoc = await loadRider(id);
+      if (!riderDoc) return;
+      rider = _buildEntry(riderDoc);
+      rider.status = 'IDLE';
+      riderState.set(id, rider);
+    }
+    if (!rider) return;
+    rider.availabilityStatus = availabilityStatus;
+    _syncIndex(id, rider); // offline → out of the search index, online → in it
+    if (availabilityStatus === 'OFFLINE' && rider.orders.size === 0) riderState.delete(id);
   });
 }
 
