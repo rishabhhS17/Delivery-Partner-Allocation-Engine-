@@ -30,6 +30,7 @@ export default function EngineHealthCard() {
     { label: 'In delivery',          value: show(engine?.queues?.ordersInDelivery) },
     { label: 'Time to assign (avg)', value: show(engine?.timeToAssign?.average_s, ' s') },
     { label: 'Database ping',        value: engine?.database?.isConnected === false ? 'down' : show(engine?.database?.pingMs, ' ms') },
+    { label: 'Mapbox calls today',   value: health?.mapbox ? `${health.mapbox.calls} / ${health.mapbox.budget}` : '—' },
   ];
 
   let state = 'Healthy';

@@ -2,6 +2,7 @@ import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import { getHealth } from '../engine/index.js';
 import { getRiderBotTickMs } from '../sim/index.js';
+import { getMapboxUsage } from '../services/routingService.js';
 import authRoutes        from './auth.js';
 import analyticsRoutes   from './analytics.js';
 import riderRoutes       from './riders.js';
@@ -19,7 +20,12 @@ const router = express.Router();
 // instance that is not the dispatcher (see the leader lease).
 router.get('/health', async (req, res, next) => {
   try {
-    res.json({ status: 'ok', engine: await getHealth(), lastRiderBotTickMs: getRiderBotTickMs() });
+    res.json({
+      status: 'ok',
+      engine: await getHealth(),
+      lastRiderBotTickMs: getRiderBotTickMs(),
+      mapbox: getMapboxUsage(),
+    });
   } catch (err) {
     next(err);
   }

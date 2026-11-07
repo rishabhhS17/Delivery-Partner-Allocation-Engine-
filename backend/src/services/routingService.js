@@ -26,6 +26,36 @@ const _routeCache = new Map(); // key -> { route, expiresAt }
 let _cacheHits = 0;
 let _cacheMisses = 0;
 
+// Daily Mapbox budget (decision K4). Counted in memory, so a restart starts the day's count over.
+let _mapboxCallsDay = null;   // 'YYYY-MM-DD' (UTC) the count belongs to
+let _mapboxCallsToday = 0;
+
+function _todayUtc() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Mapbox calls made today against the daily budget (shown on /api/health). */
+export function getMapboxUsage() {
+  const today = _todayUtc();
+  return {
+    day:    today,
+    calls:  _mapboxCallsDay === today ? _mapboxCallsToday : 0,
+    budget: config.mapboxDailyBudget,
+  };
+}
+
+// Takes one call from today's budget; false once it is used up.
+function _takeFromDailyBudget() {
+  const today = _todayUtc();
+  if (_mapboxCallsDay !== today) {
+    _mapboxCallsDay = today;
+    _mapboxCallsToday = 0;
+  }
+  if (_mapboxCallsToday >= config.mapboxDailyBudget) return false;
+  _mapboxCallsToday++;
+  return true;
+}
+
 function _round(n) {
   return Math.round(n * 1000) / 1000;
 }
@@ -62,6 +92,7 @@ function _drain() {
 
 async function _callMapbox(riderCoords, restaurantCoords, customerCoords) {
   if (!config.mapboxToken) throw new Error('MAPBOX_TOKEN not set in environment');
+  if (!_takeFromDailyBudget()) throw new Error('daily Mapbox budget used up, using straight lines');
 
   const waypoints = [
     `${riderCoords.lng},${riderCoords.lat}`,

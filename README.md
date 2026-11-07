@@ -179,6 +179,7 @@ MONGODB_URI=your_mongodb_connection_string   # required
 JWT_SECRET=your_jwt_secret                    # required
 ADMIN_PASSWORD=your_admin_password            # required
 MAPBOX_TOKEN=your_mapbox_token                # required for road-snapped routing
+MAPBOX_DAILY_BUDGET=3000                      # optional — Mapbox calls per UTC day before straight-line fallback
 SESSION_SECRET=your_session_secret            # required when NODE_ENV=production
 PORT=5000                                     # optional (default 5000)
 FRONTEND_URL=http://localhost:5173            # optional — needed in production for CORS
