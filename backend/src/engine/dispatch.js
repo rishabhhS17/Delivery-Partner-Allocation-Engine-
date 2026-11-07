@@ -28,6 +28,7 @@ const log = createLogger('engine');
 // Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.
 // The cancellation is saved first and only then announced.
 export async function _cancelExpiredOrders(now) {
+  const cancelledOrderIds = [];
   const ttlCutoff = now - getOrderTtl();
   for (const [orderId, order] of [...pendingQueue]) {
     const dispatchableMs = order.prepReadyAt
@@ -47,7 +48,9 @@ export async function _cancelExpiredOrders(now) {
     appendOrderEvent(order._id, 'cancelled', { details: { reason: 'no_rider' } });
     publish('order:cancelled', { orderId, reason: 'no_rider' });
     log.warn('order TTL expired, cancelled', { orderId, reason: 'no_rider' });
+    cancelledOrderIds.push(orderId);
   }
+  return cancelledOrderIds;
 }
 
 // An order that made dispatch throw is cancelled with reason 'engine_error' instead of being
@@ -115,6 +118,8 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
       seen.add(rid);
       const r = riderState.get(rid);
       if (!r || r.status === 'WAITING') continue;   // don't disturb a parked pickup
+      if (r.openOffer) continue;                     // one offer at a time
+      if (hasRejected(order, rid)) continue;         // never re-offer an order a rider rejected
       if (!_freeSlot(r)) continue;                   // no capacity
       const distanceKm = haversine({ lat: r.lat, lng: r.lng }, restaurant);
       if (distanceKm > maxRangeKm) continue;          // range gate (authority)
@@ -150,6 +155,21 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
   }
 
   return { kind: 'assign', orderId, order, winnerId: winner._id.toString(), result, timesScored };
+}
+
+function hasRejected(order, riderId) {
+  return (order.rejectedRiderIds ?? []).some(id => String(id) === riderId);
+}
+
+// Score the order for one given rider (used when an offer made before a restart is accepted,
+// since the original scoring is not saved). Returns an 'assign' decision, or null if it no
+// longer fits that rider's stops.
+export function _decisionForRider(orderId, order, rider, now) {
+  const candidate = {
+    rider, startPos: { lat: rider.lat, lng: rider.lng }, stops: rider.stops, deliveryTimestamps: rider.deliveryTimestamps,
+  };
+  const result = allocateClub(order, [candidate], getWeights(), now);
+  return result ? { kind: 'assign', orderId, order, winnerId: rider._id.toString(), result, timesScored: null } : null;
 }
 
 // Saves the assignment, then applies and announces it. The save is one conditional update on the

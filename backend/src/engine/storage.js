@@ -82,7 +82,7 @@ export function requeueOrders(orderIds, now) {
 export async function saveAssignment(orderId, riderId, score, now) {
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
-    { $set: { status: 'ASSIGNED', assignedRiderId: riderId, assignedAt: new Date(now), allocationScore: score } }
+    { $set: { status: 'ASSIGNED', assignedRiderId: riderId, assignedAt: new Date(now), allocationScore: score, offer: null } }
   );
   return modifiedCount === 1;
 }
@@ -127,6 +127,25 @@ export async function saveDelivery(orderId, now) {
 }
 
 /**
+ * Offer a PENDING order to a rider until expiresAtMs. Only one offer per order at a time.
+ * @returns {Promise<boolean>} true when saved, false when the order changed or is already offered.
+ */
+export async function saveOffer(orderId, riderId, expiresAtMs) {
+  const { modifiedCount } = await Order.updateOne(
+    { _id: orderId, status: 'PENDING', offer: null },
+    { $set: { offer: { riderId, expiresAt: new Date(expiresAtMs) } } }
+  );
+  return modifiedCount === 1;
+}
+
+/** Close the order's offer; a rider who rejected is remembered so they are never asked again. */
+export function clearOffer(orderId, { rejectedRiderId } = {}) {
+  const update = { $set: { offer: null } };
+  if (rejectedRiderId) update.$addToSet = { rejectedRiderIds: rejectedRiderId };
+  return Order.updateOne({ _id: orderId }, update);
+}
+
+/**
  * Cancels a PENDING order and records why.
  * @param {'no_rider'|'engine_error'} reason
  * @returns {Promise<boolean>} true when it was saved, false when the order had already changed.
@@ -134,7 +153,7 @@ export async function saveDelivery(orderId, now) {
 export async function saveCancellation(orderId, now, reason) {
   const { modifiedCount } = await Order.updateOne(
     { _id: orderId, status: 'PENDING' },
-    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason, ...CLEARED_ROUTE_FIELDS } }
+    { $set: { status: 'CANCELLED', cancelledAt: new Date(now), assignedRiderId: null, cancelReason: reason, offer: null, ...CLEARED_ROUTE_FIELDS } }
   );
   return modifiedCount === 1;
 }
@@ -154,6 +173,10 @@ export function saveOrderRoute(orderId, route, hasNextLeg) {
  *  orders and the position from the leg, so a stale value here does no harm. */
 export function saveRiderState(riderId, fields) {
   return Rider.findByIdAndUpdate(riderId, fields);
+}
+
+export function saveRiderAvailability(riderId, availabilityStatus) {
+  return Rider.updateOne({ _id: riderId }, { $set: { availabilityStatus } });
 }
 
 /** The road route for the rider's current leg arrived. */

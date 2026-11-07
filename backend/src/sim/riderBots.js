@@ -14,12 +14,14 @@ import {
   reportRiderPosition,
   riderArrived,
   riderCollectedFood,
+  acceptOffer,
 } from '../engine/index.js';
 
 const RIDER_SPEED_METRES_PER_SECOND = RIDER_SPEED_KMH / 3.6;
 
 let botTimer = null;
 let lastTickMs = null;
+const answeringOffers = new Set(); // `${riderId}:${orderId}` replies in flight
 
 /** How long the last rider-bot tick took, in ms (shown on /api/health). */
 export function getRiderBotTickMs() {
@@ -45,6 +47,7 @@ function moveAllRiders() {
 function moveEachRider() {
   const now = Date.now();
   for (const task of getRiderTasks()) {
+    if (task.offer) answerOffer(task.riderId, task.offer.orderId);
     if (task.status === 'WAITING') {
       if (now >= task.waitingUntil) riderCollectedFood(task.riderId, task.nextStop.orderId);
       continue;
@@ -56,4 +59,12 @@ function moveEachRider() {
     reportRiderPosition(task.riderId, position.lat, position.lng, position.segmentIdx);
     if (position.isComplete) riderArrived(task.riderId, task.nextStop);
   }
+}
+
+// For now every bot accepts every offer straight away.
+function answerOffer(riderId, orderId) {
+  const key = `${riderId}:${orderId}`;
+  if (answeringOffers.has(key)) return;
+  answeringOffers.add(key);
+  acceptOffer(riderId, orderId).finally(() => answeringOffers.delete(key));
 }

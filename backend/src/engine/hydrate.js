@@ -6,9 +6,10 @@ import { _meta } from './itinerary.js';
 import { _freeSlot, _addToH3 } from './h3Index.js';
 import { positionAlongLeg } from '../utils/polyline.js';
 import { enqueueOrder, clearWakeList } from './wakeList.js';
+import { clearOffers, _restoreOffer } from './offers.js';
 import { _beginLegToHead, _fetchHeadRoute } from './riderLifecycle.js';
 import {
-  loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders, appendOrderEvent,
+  loadActiveOrders, loadPendingOrders, loadRidersForStartup, requeueOrders, appendOrderEvent, clearOffer,
 } from './storage.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -93,7 +94,13 @@ export async function hydrate() {
     log.warn('re-queued orders whose rider no longer exists', { orderIds: ownerlessOrderIds });
   }
 
-  for (const ord of await loadPendingOrders()) enqueueOrder(ord, now);
+  clearOffers();
+  for (const ord of await loadPendingOrders()) {
+    enqueueOrder(ord, now);
+    // An offer saved before the restart is open again (its expiry is a saved timestamp); one for a
+    // rider who is no longer live is closed so the order can be offered to someone else.
+    if (ord.offer?.riderId && !_restoreOffer(ord)) await clearOffer(ord._id, {});
+  }
 
   log.info('hydrated from the database', { riders: riderState.size, pendingOrders: pendingQueue.size });
 }

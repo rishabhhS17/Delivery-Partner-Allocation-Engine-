@@ -27,6 +27,16 @@ const OrderSchema = new mongoose.Schema(
     // When the rider reached the restaurant. Saved (not just kept in memory) so the measured wait
     // stays right across a restart — every engine timer is a saved timestamp (decision E1).
     riderArrivedAt: { type: Date },
+    // The open offer, if any: the rider asked and when the offer lapses (a saved timestamp, so
+    // it survives a restart). Riders who rejected the order are never offered it again (G3).
+    offer: {
+      type: {
+        riderId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Rider' },
+        expiresAt: Date,
+      },
+      default: null,
+    },
+    rejectedRiderIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Rider', default: [] },
     promisedBy:   { type: Date },
 
     polyline: { type: [{ lat: Number, lng: Number }], default: [] },

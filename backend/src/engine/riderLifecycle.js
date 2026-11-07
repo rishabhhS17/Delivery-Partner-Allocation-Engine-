@@ -3,6 +3,8 @@ import { getRoute } from '../services/routingService.js';
 import { getH3Config, LOAD_WINDOW_MINUTES } from '../config/constants.js';
 import { riderState, activeRoutes } from './state.js';
 import { _syncIndex } from './h3Index.js';
+import { loadRider } from './storage.js';
+import { _buildEntry } from './hydrate.js';
 import { publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -200,4 +202,25 @@ export function _fetchHeadRoute(rider, riderId) {
     saveOrderRoute(head.orderId, route, Boolean(next)).catch(() => {});
     saveRiderLegRoute(riderId, route.leg1Coords).catch(() => {});
   }).catch(err => log.warn('route fetch failed, using straight-line fallback', { orderId: orderIdStr, riderId, error: err.message }));
+}
+
+/**
+ * Apply a rider going online or offline (already saved). Must run inside the dispatch line.
+ * Online: they join the live fleet. Offline: no new orders; idle → leave the fleet at once,
+ * busy → leave after their last delivery (see _goIdle).
+ */
+export async function _applyRiderAvailability(riderId, availabilityStatus) {
+  const id = riderId.toString();
+  let rider = riderState.get(id);
+  if (availabilityStatus === 'ONLINE' && !rider) {
+    const riderDoc = await loadRider(id);
+    if (!riderDoc) return;
+    rider = _buildEntry(riderDoc);
+    rider.status = 'IDLE';
+    riderState.set(id, rider);
+  }
+  if (!rider) return;
+  rider.availabilityStatus = availabilityStatus;
+  _syncIndex(id, rider); // offline → out of the search index, online → in it
+  if (availabilityStatus === 'OFFLINE' && rider.orders.size === 0) riderState.delete(id);
 }

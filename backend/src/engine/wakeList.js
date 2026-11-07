@@ -45,6 +45,11 @@ export function countScoring(orderId) {
   return timesScored;
 }
 
+/** Keep the order queued but asleep with no wake-up time (it has an open offer). */
+export function unscheduleWake(orderId) {
+  wakeAtByOrder.delete(orderId);
+}
+
 export function clearWakeList() {
   wakeAtByOrder.clear();
   wakeEntries.length = 0;

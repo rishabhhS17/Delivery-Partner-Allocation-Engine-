@@ -41,6 +41,11 @@ export const NO_RIDER_RETRY_DELAYS_MS = [1000, 2000, 4000, 10_000];
 // limit far above Ranchi's normal queue (a few hundred at peak), not an overload policy.
 export const MAX_PENDING_ORDERS = 5000;
 
+// Rider offers (decision G3): how long a rider has to answer, and how many unanswered offers
+// in a row switch them offline.
+export const OFFER_TIMEOUT_MS = 30_000;
+export const IGNORED_OFFERS_BEFORE_OFFLINE = 3;
+
 // Stage 3 — capped interleaved clubbing (Model A) + anti-starvation.
 export const CLUBBING_CAP                   = 2;    // N-general ceiling; nothing hardcoded to 2
 export const CLUBBING_RESTAURANT_RADIUS_KM  = 1.5;  // B's restaurant near the rider's path

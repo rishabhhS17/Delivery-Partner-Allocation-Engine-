@@ -7,20 +7,22 @@ import { latLngToCell } from 'h3-js';
 import { getH3Config, MAX_PENDING_ORDERS } from '../config/constants.js';
 import { createOrder } from '../services/orderGenerator.js';
 import { riderState, pendingQueue, runtime } from './state.js';
-import { _reindexIfBucketed, _syncIndex } from './h3Index.js';
+import { _reindexIfBucketed } from './h3Index.js';
 import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
-import { _chooseAssignment, _commitAssignment } from './dispatch.js';
-import { hydrate, _buildEntry } from './hydrate.js';
+import { _chooseAssignment } from './dispatch.js';
+import { hydrate } from './hydrate.js';
 import {
-  runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
+  runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops, assignOrOffer,
 } from './dispatchLoop.js';
+import { _acceptOffer, _rejectOffer, _withdrawOffer } from './offers.js';
+import { _applyRiderAvailability } from './riderLifecycle.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
-import { enqueueOrder } from './wakeList.js';
+import { enqueueOrder, scheduleWake } from './wakeList.js';
 
 // Only the instance holding the leader lease runs the engine (decision E4).
 export { startLeaderElection, resignLeadership };
-import { saveFinalPositions, appendOrderEvent, loadRider } from './storage.js';
+import { saveFinalPositions, appendOrderEvent, clearOffer } from './storage.js';
 import { subscribe, buildLiveSnapshot, publish } from './broadcast.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -35,6 +37,8 @@ const log = createLogger('engine');
  * @property {number} lng
  * @property {number|null} waitingUntil  Epoch ms the food is ready (WAITING riders only).
  * @property {StopRef|null} nextStop  The stop the rider is heading to or waiting at.
+ * @property {{ orderId: string, expiresAtMs: number }|null} offer  An order offered to the rider,
+ *           waiting for acceptOffer / rejectOffer (no answer by expiresAtMs counts as ignored).
  * @property {RiderLeg|null} leg  The leg toward the next stop; null when there is nothing to do.
  */
 
@@ -162,7 +166,9 @@ export async function placeOrder(request = {}) {
 /**
  * Dispatch one queued order right now, skipping the just-in-time wait (manual dispatch).
  * Waits its turn behind any dispatch round in progress.
+ * An idle rider is offered it (and may refuse); a busy rider's clubbed order is assigned.
  * @returns {Promise<{ status: 'not_pending' } | { status: 'no_rider', orderId: string }
+ *          | { status: 'offered', orderId: string, riderId: string, riderName: string }
  *          | { status: 'assigned', orderId: string, riderId: string, riderName: string,
  *              score: number, breakdown: object, candidatesConsidered: number }>}
  */
@@ -171,9 +177,14 @@ export function dispatchNow(orderId) {
     const id = orderId.toString();
     const order = pendingQueue.get(id);
     if (!order) return { status: 'not_pending' };
+    const openOfferRider = riderOfOpenOffer(id);
+    if (openOfferRider) return { status: 'offered', orderId: id, ...openOfferRider };
     const decision = _chooseAssignment(id, order, Date.now(), { skipJitHold: true });
-    const assignment = decision.kind === 'assign' ? await _commitAssignment(decision) : null;
-    if (assignment) return { status: 'assigned', orderId: id, ...assignment };
+    if (decision.kind !== 'assign') return { status: 'no_rider', orderId: id };
+    const outcome = await assignOrOffer(decision);
+    const rider = riderState.get(decision.winnerId);
+    if (outcome === true) return { status: 'offered', orderId: id, riderId: decision.winnerId, riderName: rider?.name };
+    if (outcome) return { status: 'assigned', orderId: id, ...outcome };
     // The save may have found the order already changed and dropped it from the queue.
     return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };
   });
@@ -192,19 +203,40 @@ export function setRiderAvailability(riderId, availabilityStatus) {
   if (!runtime.running) return Promise.resolve(); // not the dispatcher: it loads riders at startup
   const id = riderId.toString();
   return runExclusive(async () => {
-    let rider = riderState.get(id);
-    if (availabilityStatus === 'ONLINE' && !rider) {
-      const riderDoc = await loadRider(id);
-      if (!riderDoc) return;
-      rider = _buildEntry(riderDoc);
-      rider.status = 'IDLE';
-      riderState.set(id, rider);
+    // An offline rider can't answer: their open offer goes straight back to dispatch.
+    const openOfferOrderId = riderState.get(id)?.openOffer?.orderId;
+    if (availabilityStatus === 'OFFLINE' && openOfferOrderId) {
+      await clearOffer(pendingQueue.get(openOfferOrderId)?._id ?? openOfferOrderId, {});
+      _withdrawOffer(openOfferOrderId);
+      if (pendingQueue.has(openOfferOrderId)) scheduleWake(openOfferOrderId, Date.now());
     }
-    if (!rider) return;
-    rider.availabilityStatus = availabilityStatus;
-    _syncIndex(id, rider); // offline → out of the search index, online → in it
-    if (availabilityStatus === 'OFFLINE' && rider.orders.size === 0) riderState.delete(id);
+    await _applyRiderAvailability(id, availabilityStatus);
   });
+}
+
+// ─── Offers (what a rider's phone would send) ────────────────────────────────
+
+/**
+ * The rider accepts the order they were offered; it is then assigned to them.
+ * @returns {Promise<'assigned'|'not_offered'|'failed'>}  failed: the save failed, accept again
+ */
+export function acceptOffer(riderId, orderId) {
+  return runExclusive(() => _acceptOffer(String(riderId), String(orderId)));
+}
+
+/**
+ * The rider turns the order down; they will never be offered that order again.
+ * @returns {Promise<'rejected'|'not_offered'|'failed'>}
+ */
+export function rejectOffer(riderId, orderId) {
+  return runExclusive(() => _rejectOffer(String(riderId), String(orderId)));
+}
+
+function riderOfOpenOffer(orderId) {
+  for (const [riderId, rider] of riderState) {
+    if (rider.openOffer?.orderId === orderId) return { riderId, riderName: rider.name };
+  }
+  return null;
 }
 
 // ─── Rider reports (what a rider's phone would send) ────────────────────────
@@ -222,6 +254,7 @@ export function getRiderTasks() {
       lng:          rider.lng,
       waitingUntil: rider.status === 'WAITING' ? (rider.waitingUntil ?? 0) : null,
       nextStop:     head ? { orderId: head.orderId.toString(), type: head.type } : null,
+      offer:        rider.openOffer ?? null,
       leg: hasLeg ? {
         originLat:   rider.legOriginLat,
         originLng:   rider.legOriginLng,

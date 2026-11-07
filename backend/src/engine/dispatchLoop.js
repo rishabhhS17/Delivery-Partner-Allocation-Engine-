@@ -4,6 +4,11 @@ import { publish, buildFleetSnapshot } from './broadcast.js';
 import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
 import { recordDispatchRoundMs, recordBroadcastMs } from './health.js';
 import { enqueueOrder, takeDueOrderIds, scheduleWake, nextNoRiderRetryDelay, resetNoRiderRetries } from './wakeList.js';
+import {
+  _cancelExpiredOrders, _chooseAssignment, _commitAssignment, _cancelOrderAfterEngineError,
+} from './dispatch.js';
+import { _makeOffer, _expireOffers, _withdrawOffer } from './offers.js';
+import { riderState } from './state.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
@@ -11,9 +16,6 @@ const log = createLogger('engine');
 // How often the dispatcher looks for PENDING orders it has not heard about — ones created
 // through another instance during a deploy, or by a script.
 const PENDING_SYNC_EVERY_MS = 5_000;
-import {
-  _cancelExpiredOrders, _chooseAssignment, _commitAssignment, _cancelOrderAfterEngineError,
-} from './dispatch.js';
 
 // ─── Dispatch loop ───────────────────────────────────────────────────────────
 // One dispatch round about every second. A round awaits its database writes (an assignment is
@@ -85,8 +87,10 @@ async function runDispatchRound() {
     publish('simulation:status', { running: runtime.running, dispatchPaused: false });
   }
 
-  // Phase 1 — drop orders that waited too long after becoming dispatchable.
-  await _cancelExpiredOrders(Date.now());
+  // Phase 1 — offers nobody answered in time go back to dispatch; orders that waited too long
+  // after becoming dispatchable are cancelled (withdrawing any open offer).
+  await _expireOffers(Date.now());
+  for (const orderId of await _cancelExpiredOrders(Date.now())) _withdrawOffer(orderId);
 
   // Phase 2 — score only the orders whose wake-up time has come (marginal-cost clubbing + JIT
   // hold + force-assign); the rest sleep in the wake-up list.
@@ -103,6 +107,7 @@ async function runDispatchRound() {
       decision = _chooseAssignment(orderId, order, Date.now());
     } catch (err) {
       await _cancelOrderAfterEngineError(orderId, order, err);
+      _withdrawOffer(orderId);
       continue;
     }
     if (decision.kind === 'hold') {
@@ -110,7 +115,7 @@ async function runDispatchRound() {
       scheduleWake(orderId, decision.wakeAt);
     } else if (decision.kind === 'no_rider') {
       scheduleWake(orderId, Date.now() + nextNoRiderRetryDelay(orderId)); // 1 → 2 → 4 → 10 s
-    } else if (!(await _commitAssignment(decision)) && pendingQueue.has(orderId)) {
+    } else if (!(await assignOrOffer(decision)) && pendingQueue.has(orderId)) {
       scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_DELAYS_MS[0]); // save failed: try again shortly
     }
   }
@@ -130,4 +135,11 @@ export function startBroadcastLoop() {
 
 function promisedByMs(order) {
   return order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
+}
+
+// An idle rider is offered the order and may say no (decision G3); a busy rider's clubbed order
+// is still assigned directly.
+export function assignOrOffer(decision) {
+  const isWinnerIdle = riderState.get(decision.winnerId)?.orders.size === 0;
+  return isWinnerIdle ? _makeOffer(decision) : _commitAssignment(decision);
 }
