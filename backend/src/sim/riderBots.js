@@ -26,7 +26,7 @@ const RIDER_SPEED_METRES_PER_SECOND = RIDER_SPEED_KMH / 3.6;
 let botTimer = null;
 let lastTickMs = null;
 // What each bot decided, so it decides once per offer / per order (the rates in Settings).
-const offerReplies = new Map();      // `${riderId}:${orderId}` → { answer, answerAt, isSent }
+const offerReplies = new Map();      // `${riderId}:${orderId}:${expiresAtMs}` (one offer) → { answer, answerAt, isSent }
 const pickupPlans  = new Map();      // `${riderId}:${orderId}` → { cancelAt: ms | null, isSent }
 
 // Presenter buttons (decision I3): the next offer any bot sees is rejected / ignored, or the next
@@ -71,7 +71,7 @@ function moveEachRider() {
   const now = Date.now();
   const liveKeys = new Set();
   for (const task of getRiderTasks()) {
-    if (task.offer) liveKeys.add(answerOffer(task.riderId, task.offer.orderId, now));
+    if (task.offer) liveKeys.add(answerOffer(task.riderId, task.offer, now));
     if (task.nextStop?.type === 'PICKUP') liveKeys.add(maybeCancelBeforePickup(task.riderId, task.nextStop.orderId, now));
     if (task.status === 'WAITING') {
       if (now >= task.waitingUntil) riderCollectedFood(task.riderId, task.nextStop.orderId);
@@ -89,8 +89,10 @@ function moveEachRider() {
 
 // Decide once how to answer an offer — reject, ignore or accept, at the configured rates — and
 // answer after a human-like pause. Returns the plan's key so finished plans can be forgotten.
-function answerOffer(riderId, orderId, now) {
-  const key = `${riderId}:${orderId}`;
+// Keyed by the offer itself (its expiry), not just the order: when an ignored offer lapses and
+// the same order is offered to the same rider again, the bot decides afresh.
+function answerOffer(riderId, { orderId, expiresAtMs }, now) {
+  const key = `${riderId}:${orderId}:${expiresAtMs}`;
   let reply = offerReplies.get(key);
   if (!reply) {
     const behaviour = getRiderBotBehaviour();
