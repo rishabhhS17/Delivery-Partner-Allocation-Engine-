@@ -10,7 +10,8 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('engine');
 
 // ─── Offers ──────────────────────────────────────────────────────────────────
-// A rider is offered an order rather than handed it (decision G3). The offer is saved on the
+// A rider is offered an order rather than handed it (decision G3) — a second order for a busy
+// rider (clubbing) too: they keep riding while the offer is open (decision K5). The offer is saved on the
 // order with its expiry time, so it survives a restart. The rider accepts (the assignment is
 // then saved as usual), rejects (they are never offered that order again), or lets 30 s pass —
 // an ignore. Three ignores in a row and the rider is switched offline. A rider holds at most
@@ -64,7 +65,10 @@ export async function _acceptOffer(riderId, orderId) {
   const offer = openOffers.get(orderId);
   if (!offer || offer.riderId !== riderId) return 'not_offered';
   const rider = riderState.get(riderId);
-  const decision = offer.decision ?? (rider && _decisionForRider(orderId, offer.order, rider, Date.now()));
+  // The rider kept riding while the offer was open, so check the order still fits their stops
+  // now. The original scoring is kept for the record when there is one (not after a restart).
+  const fitsNow = rider && _decisionForRider(orderId, offer.order, rider, Date.now());
+  const decision = fitsNow && (offer.decision ?? fitsNow);
   if (!decision) {
     // The rider can no longer fit this order in (their stops changed since the offer): hand it
     // back to dispatch. Not a reject — they may be offered it again later.

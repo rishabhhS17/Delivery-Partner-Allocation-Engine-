@@ -12,9 +12,9 @@ import { _arriveAtStop, _completePickup } from './riderLifecycle.js';
 import { _chooseAssignment } from './dispatch.js';
 import { hydrate } from './hydrate.js';
 import {
-  runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops, assignOrOffer,
+  runExclusive, startDispatchLoop, startBroadcastLoop, startPendingOrderSync, stopLoops,
 } from './dispatchLoop.js';
-import { _acceptOffer, _rejectOffer, _withdrawOffer } from './offers.js';
+import { _makeOffer, _acceptOffer, _rejectOffer, _withdrawOffer } from './offers.js';
 import { _applyRiderAvailability } from './riderLifecycle.js';
 import { startLeaderElection, resignLeadership, isThisInstanceLeader } from './leaderLease.js';
 import { getEngineHealth } from './health.js';
@@ -166,11 +166,9 @@ export async function placeOrder(request = {}) {
 /**
  * Dispatch one queued order right now, skipping the just-in-time wait (manual dispatch).
  * Waits its turn behind any dispatch round in progress.
- * An idle rider is offered it (and may refuse); a busy rider's clubbed order is assigned.
+ * The chosen rider is offered it and may refuse, like any other order.
  * @returns {Promise<{ status: 'not_pending' } | { status: 'no_rider', orderId: string }
- *          | { status: 'offered', orderId: string, riderId: string, riderName: string }
- *          | { status: 'assigned', orderId: string, riderId: string, riderName: string,
- *              score: number, breakdown: object, candidatesConsidered: number }>}
+ *          | { status: 'offered', orderId: string, riderId: string, riderName: string }>}
  */
 export function dispatchNow(orderId) {
   return runExclusive(async () => {
@@ -181,10 +179,9 @@ export function dispatchNow(orderId) {
     if (openOfferRider) return { status: 'offered', orderId: id, ...openOfferRider };
     const decision = _chooseAssignment(id, order, Date.now(), { skipJitHold: true });
     if (decision.kind !== 'assign') return { status: 'no_rider', orderId: id };
-    const outcome = await assignOrOffer(decision);
-    const rider = riderState.get(decision.winnerId);
-    if (outcome === true) return { status: 'offered', orderId: id, riderId: decision.winnerId, riderName: rider?.name };
-    if (outcome) return { status: 'assigned', orderId: id, ...outcome };
+    if (await _makeOffer(decision)) {
+      return { status: 'offered', orderId: id, riderId: decision.winnerId, riderName: riderState.get(decision.winnerId)?.name };
+    }
     // The save may have found the order already changed and dropped it from the queue.
     return pendingQueue.has(id) ? { status: 'no_rider', orderId: id } : { status: 'not_pending' };
   });

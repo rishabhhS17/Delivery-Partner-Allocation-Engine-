@@ -6,7 +6,7 @@ const router = express.Router();
 
 // POST /api/allocation/allocate
 // Manually dispatch one PENDING order now, through the engine's normal scoring (idle and busy
-// riders, clubbing), skipping only the just-in-time wait. An idle rider is offered the order.
+// riders, clubbing), skipping only the just-in-time wait. The chosen rider is offered the order.
 router.post('/allocate', async (req, res, next) => {
   try {
     const { orderId } = req.body;
@@ -20,15 +20,11 @@ router.post('/allocate', async (req, res, next) => {
       return res.json({ assigned: false, message: 'No eligible riders in range — order stays PENDING', orderId });
     }
 
-    if (outcome.status === 'offered') {
-      return res.json({
-        assigned: false, offered: true, orderId, riderId: outcome.riderId, riderName: outcome.riderName,
-        message: `Offered to ${outcome.riderName ?? 'a rider'} — waiting for them to accept`,
-      });
-    }
-
-    const { riderId, riderName, score, breakdown, candidatesConsidered } = outcome;
-    return res.json({ assigned: true, orderId, riderId, riderName, score, breakdown, candidatesConsidered });
+    // Every assignment goes through an offer: the rider may still refuse it.
+    return res.json({
+      assigned: false, offered: true, orderId, riderId: outcome.riderId, riderName: outcome.riderName,
+      message: `Offered to ${outcome.riderName ?? 'a rider'} — waiting for them to accept`,
+    });
   } catch (err) {
     next(err);
   }

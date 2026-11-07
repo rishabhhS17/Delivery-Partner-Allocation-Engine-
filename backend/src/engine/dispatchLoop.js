@@ -5,10 +5,9 @@ import { isDatabaseAvailable, loadPendingOrders } from './storage.js';
 import { recordDispatchRoundMs, recordBroadcastMs } from './health.js';
 import { enqueueOrder, takeDueOrderIds, scheduleWake, nextNoRiderRetryDelay, resetNoRiderRetries } from './wakeList.js';
 import {
-  _cancelExpiredOrders, _chooseAssignment, _commitAssignment, _cancelOrderAfterEngineError,
+  _cancelExpiredOrders, _chooseAssignment, _cancelOrderAfterEngineError,
 } from './dispatch.js';
 import { _makeOffer, _expireOffers, _withdrawOffer } from './offers.js';
-import { riderState } from './state.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
@@ -115,7 +114,7 @@ async function runDispatchRound() {
       scheduleWake(orderId, decision.wakeAt);
     } else if (decision.kind === 'no_rider') {
       scheduleWake(orderId, Date.now() + nextNoRiderRetryDelay(orderId)); // 1 → 2 → 4 → 10 s
-    } else if (!(await assignOrOffer(decision)) && pendingQueue.has(orderId)) {
+    } else if (!(await _makeOffer(decision)) && pendingQueue.has(orderId)) {
       scheduleWake(orderId, Date.now() + NO_RIDER_RETRY_DELAYS_MS[0]); // save failed: try again shortly
     }
   }
@@ -135,11 +134,4 @@ export function startBroadcastLoop() {
 
 function promisedByMs(order) {
   return order.promisedBy ? new Date(order.promisedBy).getTime() : Infinity;
-}
-
-// An idle rider is offered the order and may say no (decision G3); a busy rider's clubbed order
-// is still assigned directly.
-export function assignOrOffer(decision) {
-  const isWinnerIdle = riderState.get(decision.winnerId)?.orders.size === 0;
-  return isWinnerIdle ? _makeOffer(decision) : _commitAssignment(decision);
 }
