@@ -51,6 +51,15 @@ test('the search range widens 5 → 7 → 10 km at 60 s and 120 s (decision G1)'
   assert.equal(searchRangeKm(10 * 60_000), 10);
 });
 
+test('the configured search range cannot be set above 10 km', async () => {
+  const { setH3Config, getH3Config, searchRangeKm } = await import('../config/constants.js');
+  assert.throws(() => setH3Config({ maxRangeKm: 500 }), /at most 10 km/);
+  assert.equal(getH3Config().maxRangeKm, 5, 'a refused value leaves the range unchanged');
+  setH3Config({ maxRangeKm: 10 });
+  assert.equal(searchRangeKm(10 * 60_000), 10, 'widening never goes past 10 km');
+  setH3Config({ maxRangeKm: 5 });
+});
+
 test('rider bot behaviour rates are validated (decision G4)', async () => {
   const { getRiderBotBehaviour, setRiderBotBehaviour, DEFAULT_RIDER_BOT_BEHAVIOUR } = await import('../config/constants.js');
   assert.throws(() => setRiderBotBehaviour({ rejectPercent: 101 }), /between 0 and 100/);

@@ -52,6 +52,8 @@ export const SEARCH_WIDENING_STEPS = [
   { afterMs: 60_000,  rangeKm: 7 },
   { afterMs: 120_000, rangeKm: 10 },
 ];
+// No search, configured or widened, ever looks further than this.
+export const MAX_SEARCH_RANGE_KM = 10;
 
 /** How far to look for riders for an order that has been in dispatch for elapsedMs. */
 export function searchRangeKm(elapsedMs) {
@@ -121,6 +123,8 @@ export function setH3Config({ resolution, restaurantServiceK, maxRangeKm } = {})
   if (maxRangeKm !== undefined) {
     if (typeof maxRangeKm !== 'number' || !Number.isFinite(maxRangeKm) || maxRangeKm <= 0)
       throw new Error('maxRangeKm must be a positive number');
+    if (maxRangeKm > MAX_SEARCH_RANGE_KM)
+      throw new Error(`maxRangeKm must be at most ${MAX_SEARCH_RANGE_KM} km`);
     next.maxRangeKm = maxRangeKm;
   }
   currentH3 = next;
