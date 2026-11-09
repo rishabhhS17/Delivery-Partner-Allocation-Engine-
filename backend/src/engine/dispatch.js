@@ -102,7 +102,15 @@ function _clubbable(rider, order) {
 //   { kind: 'hold', wakeAt }   — the best rider need not leave yet: look again at wakeAt
 //   { kind: 'no_rider' }       — nobody in range with room
 // skipJitHold chooses now instead of waiting for the departure moment (manual dispatch).
-export function _chooseAssignment(orderId, order, now, { skipJitHold = false } = {}) {
+export function _chooseAssignment(orderId, order, now, options = {}) {
+  const decision = scoreOrderForDispatch(orderId, order, now, options);
+  // Waiting for the food is not a failed search, so the widening clock starts at the first real
+  // try: nobody in range, or the moment to send a rider.
+  if (decision.kind !== 'hold') startSearchClock(orderId, order, now);
+  return decision;
+}
+
+function scoreOrderForDispatch(orderId, order, now, { skipJitHold = false } = {}) {
   const force = skipJitHold || now >= forceAssignAt(order); // PENDING anti-starvation backstop
   const timesScored = countScoring(orderId);
   const maxRangeKm = currentSearchRangeKm(orderId, order, now);
@@ -160,20 +168,23 @@ export function _chooseAssignment(orderId, order, now, { skipJitHold = false } =
 }
 
 // The radius grows the longer dispatch has been trying (decision G1). The clock starts at the
-// first attempt and is saved, so a restart does not reset it.
+// first real try (see _chooseAssignment) and is saved, so a restart does not reset it.
 function currentSearchRangeKm(orderId, order, now) {
-  if (!order.dispatchStartedAt) {
-    order.dispatchStartedAt = new Date(now);
-    saveDispatchStarted(order._id, now)
-      .catch(err => log.error('dispatch start write failed', { orderId, error: err.message }));
-  }
-  const rangeKm = searchRangeKm(now - new Date(order.dispatchStartedAt).getTime());
+  const triedForMs = order.dispatchStartedAt ? now - new Date(order.dispatchStartedAt).getTime() : 0;
+  const rangeKm = searchRangeKm(triedForMs);
   if (order.searchRangeKm && rangeKm > order.searchRangeKm) {
     appendOrderEvent(order._id, 'search_widened', { details: { rangeKm } });
     log.info('search widened', { orderId, rangeKm });
   }
   order.searchRangeKm = rangeKm;
   return rangeKm;
+}
+
+function startSearchClock(orderId, order, now) {
+  if (order.dispatchStartedAt) return;
+  order.dispatchStartedAt = new Date(now);
+  saveDispatchStarted(order._id, now)
+    .catch(err => log.error('dispatch start write failed', { orderId, error: err.message }));
 }
 
 function hasRejected(order, riderId) {
