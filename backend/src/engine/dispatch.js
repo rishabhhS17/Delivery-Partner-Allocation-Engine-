@@ -25,18 +25,17 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('engine');
 
-// Drop orders that waited too long AFTER becoming dispatchable (TTL fix).
-// Measured from prepReadyAt so a JIT-held order is never cancelled for sitting through prep.
+// Cancel orders still unallocated a fixed time after their food is ready, so a long prep never
+// eats into the search time (a kitchen delay moves the window with it). An order a rider gave
+// back counts from when it re-entered the queue, if that is later: it gets a fresh window.
 // The cancellation is saved first and only then announced.
 export async function _cancelExpiredOrders(now) {
   const cancelledOrderIds = [];
   const ttlCutoff = now - getOrderTtl();
   for (const [orderId, order] of [...pendingQueue]) {
-    // Dispatchable from when the food is ready or when it (re)entered the queue, whichever is
-    // later — so an order a rider gave back gets a fresh window to find another rider.
     const queuedMs = new Date(order.queuedAt ?? order.createdAt ?? now).getTime();
-    const dispatchableMs = Math.max(order.prepReadyAt ? new Date(order.prepReadyAt).getTime() : 0, queuedMs);
-    if (dispatchableMs > ttlCutoff) continue;
+    const foodReadyMs = order.prepReadyAt ? new Date(order.prepReadyAt).getTime() : 0;
+    if (Math.max(foodReadyMs, queuedMs) > ttlCutoff) continue;
 
     let isCancelled;
     try {

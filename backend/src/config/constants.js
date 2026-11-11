@@ -6,9 +6,9 @@ export const RESTAURANT_SERVICE_K   = 2;
 
 export const RIDER_SPEED_KMH        = 40;
 export const TICK_INTERVAL_MS       = 1000;
-// Max wall-clock time an order may sit PENDING (waiting for a rider) before it is
-// dropped and marked CANCELLED. Tunable; kept short so it is observable in a demo.
-export const ORDER_TTL_MS           = 180_000; // 180 s
+// An order still PENDING this long after its food is ready (or after a rider gave it back,
+// whichever is later) is cancelled. Cooking time never counts against it. Tunable.
+export const ORDER_TTL_MS           = 300_000; // 5 min
 export const RIDER_SEED_COUNT       = 32;
 export const AUTO_ORDER_INTERVAL_MS = 600_000;
 export const LOAD_WINDOW_MINUTES    = 60;
@@ -21,8 +21,8 @@ export const DEFAULT_WEIGHTS = { etar: 0.71, load: 0.29 };
 // Stage 1 — food-prep + just-in-time hold. Prep is a random duration per order;
 // JIT_GRACE is also random per order (drawn once at creation, stored on the order),
 // biased small so a rider arrives slightly early (brief WAITING) rather than late.
-export const PREP_TIME_MIN_S = 300;
-export const PREP_TIME_MAX_S = 900;
+export const PREP_TIME_MIN_S = 30;
+export const PREP_TIME_MAX_S = 60;
 export const JIT_GRACE_MIN_S = 1;
 export const JIT_GRACE_MAX_S = 20;
 
@@ -183,11 +183,11 @@ export function setRiderBotBehaviour(update = {}) {
 export const DEFAULT_KITCHEN_BOT_BEHAVIOUR = {
   rejectPercent:   2,   // orders the restaurant turns down (within seconds of the order)
   delayPercent:    10,  // orders whose food runs late…
-  delayMinMinutes: 3,   // …by between these many minutes,
-  delayMaxMinutes: 8,   //    announced halfway through the original estimate
+  delayMinMinutes: 0.5, // …by between these many minutes (in proportion to a 30–60 s prep),
+  delayMaxMinutes: 1.5, //    announced halfway through the original estimate
   earlyPercent:    10,  // orders whose food is ready early…
-  earlyMinMinutes: 1,   // …by between these many minutes
-  earlyMaxMinutes: 3,
+  earlyMinMinutes: 0.2, // …by between these many minutes
+  earlyMaxMinutes: 0.4,
 };
 
 let currentKitchenBotBehaviour = { ...DEFAULT_KITCHEN_BOT_BEHAVIOUR };

@@ -18,7 +18,7 @@ const WEIGHT_FIELDS = [
 // Geo + timing knobs. `key` maps to the geoInputs state; `step`/`min` drive the number input.
 const GEO_FIELDS = [
   { key: 'orderTtlSec',        label: 'Order TTL (s)',              min: 1,  step: 1,
-    description: 'How long an order waits for a rider before it is cancelled. Applies live.' },
+    description: 'How long after its food is ready an order may stay unassigned before it is cancelled (a fresh window if a rider gives it back). Applies live.' },
   { key: 'restaurantServiceK', label: 'Service-K (restaurant selection)', min: 0, step: 1,
     description: 'Hex-ring radius of restaurants shown to a customer. Applies live.' },
   { key: 'resolution',        label: 'H3 resolution',              min: 0,  step: 1,
@@ -44,11 +44,11 @@ const BOT_GROUPS = [
     fields: [
       { key: 'rejectPercent', label: 'Restaurant rejects (%)', step: 1, description: 'Orders the restaurant turns down within seconds; they are cancelled.' },
       { key: 'delayPercent', label: 'Food delayed (%)', step: 1, description: 'Orders whose food runs late, announced halfway through the estimate.' },
-      { key: 'delayMinMinutes', label: 'Delay, min (minutes)', step: 1, description: 'Shortest delay.' },
-      { key: 'delayMaxMinutes', label: 'Delay, max (minutes)', step: 1, description: 'Longest delay.' },
+      { key: 'delayMinMinutes', label: 'Delay, min (minutes)', step: 0.1, description: 'Shortest delay.' },
+      { key: 'delayMaxMinutes', label: 'Delay, max (minutes)', step: 0.1, description: 'Longest delay.' },
       { key: 'earlyPercent', label: 'Food early (%)', step: 1, description: 'Orders whose food is ready ahead of the estimate.' },
-      { key: 'earlyMinMinutes', label: 'Early by, min (minutes)', step: 1, description: 'Least time early.' },
-      { key: 'earlyMaxMinutes', label: 'Early by, max (minutes)', step: 1, description: 'Most time early.' },
+      { key: 'earlyMinMinutes', label: 'Early by, min (minutes)', step: 0.1, description: 'Least time early.' },
+      { key: 'earlyMaxMinutes', label: 'Early by, max (minutes)', step: 0.1, description: 'Most time early.' },
     ],
   },
 ];
