@@ -52,11 +52,28 @@ test('cheapestInsertion keeps pickup before drop and returns a 4-stop ordering',
   assert.ok(ins.marginalCost > 0);
 });
 
-test('cheapestInsertion returns null when B cannot meet its deadline', () => {
-  const start = { lat: 23.30, lng: 85.28 };
-  const tightB = { ...orderB, promisedBy: new Date(now - 1000) }; // already past due
-  const ins = cheapestInsertion([], pickupStop(tightB), dropStop(tightB), start, now);
-  assert.equal(ins, null);
+test('a new order that will be late still gets a rider: the least-late one', () => {
+  const lateB = { ...orderB, promisedBy: new Date(now - 1000) }; // already past due
+  const ins = cheapestInsertion([], pickupStop(lateB), dropStop(lateB), { lat: 23.30, lng: 85.28 }, now);
+  assert.ok(ins, 'a late order is not blocked by its own promise');
+  const near = { rider: { _id: 'near' }, startPos: { lat: 23.345, lng: 85.321 }, stops: [], deliveryTimestamps: [] };
+  const far  = { rider: { _id: 'far' },  startPos: { lat: 23.300, lng: 85.321 }, stops: [], deliveryTimestamps: [] };
+  assert.equal(allocateClub(lateB, [near, far], { etar: 1, load: 0 }, now).winner.rider._id, 'near');
+});
+
+test('a second order is never fitted in a way that makes an order already on board late', () => {
+  const start = { lat: 23.350, lng: 85.320 };
+  // A is on board, its drop ~12 km north (~18 min) and promised just 20 s after the direct ride:
+  // too far off for the aging lock or head freeze, so only the deadline check protects it.
+  const onBoard = { ...orderA, customerLat: 23.458, customerLng: 85.320 };
+  const directDropMs = simulateRoute([dropStop(onBoard)], start, now).dropTimes['A'];
+  onBoard.promisedBy = new Date(directDropMs + 20_000);
+  // B's restaurant is ~600 m to the side: picking it up first would cost A about 100 s.
+  const sideB = { ...orderB, restaurantLat: 23.350, restaurantLng: 85.326, customerLat: 23.456, customerLng: 85.320 };
+  const ins = cheapestInsertion([dropStop(onBoard)], pickupStop(sideB), dropStop(sideB), start, now);
+  assert.ok(ins);
+  assert.equal(ins.ordering[0].orderId, 'A', 'A is dropped first');
+  assert.ok(simulateRoute(ins.ordering, start, now).dropTimes['A'] <= onBoard.promisedBy.getTime(), 'A keeps its promise');
 });
 
 test('deadlineOk fails when a drop lands after its promisedBy', () => {

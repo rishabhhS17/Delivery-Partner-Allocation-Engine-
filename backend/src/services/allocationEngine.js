@@ -166,10 +166,12 @@ export function routeTime(stops, startPos, now = Date.now()) {
 }
 
 // Every DROP with a promisedBy must complete before that deadline in the given ordering.
-export function deadlineOk(stops, startPos, now = Date.now()) {
+// ignoredOrderId: the order being added is allowed to run late (it is still better delivered late
+// than cancelled); only the orders the rider already carries must keep their promise.
+export function deadlineOk(stops, startPos, now = Date.now(), ignoredOrderId = null) {
   const { dropTimes } = simulateRoute(stops, startPos, now);
   for (const stop of stops) {
-    if (stop.type === 'DROP' && stop.promisedBy) {
+    if (stop.type === 'DROP' && stop.promisedBy && _oid(stop) !== ignoredOrderId) {
       if (dropTimes[_oid(stop)] > new Date(stop.promisedBy).getTime()) return false;
     }
   }
@@ -207,7 +209,7 @@ export function cheapestInsertion(stops, pickupB, dropB, startPos, now = Date.no
       ordering.splice(i, 0, pickupB);
       ordering.splice(j, 0, dropB);
 
-      if (!deadlineOk(ordering, startPos, now)) continue;
+      if (!deadlineOk(ordering, startPos, now, _oid(dropB))) continue;
 
       if (agingLocked.size) {
         const sim = simulateRoute(ordering, startPos, now);
