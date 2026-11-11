@@ -6,6 +6,15 @@ It runs one city (Ranchi) with a simulated fleet of riders, kitchens and custome
 
 > **The core idea:** for each order, pick the rider who adds the **least extra delivery time** to their current trip (idle or already carrying an order), send them so they **arrive as the food is ready**, and treat the assignment as an **offer** the rider can turn down.
 
+## Live demo
+
+| Version | What it is | App | Code |
+|---|---|---|---|
+| **Current** | The engine this README describes: least-extra-time scoring, clubbing, just-in-time hold, offers, crash recovery | [nexrouted.vercel.app](https://nexrouted.vercel.app) | `main` |
+| **v1** (earlier, simpler) | H3 shortlist, then a weighted score of arrival time, rating and recent load; one order per rider, with a queued next order | [nexroute-v1.vercel.app](https://nexroute-v1.vercel.app) | [`v1`](https://github.com/rishabhhS17/Delivery-Partner-Allocation-Engine-/tree/v1) |
+
+Both run on free hosting, so the first visit after a quiet spell takes about a minute while the backend wakes up.
+
 ---
 
 ## Why "send the nearest free rider" is not enough
