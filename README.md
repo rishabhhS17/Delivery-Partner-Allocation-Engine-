@@ -56,7 +56,7 @@ flowchart LR
 
 - **One process per city.** The engine keeps the live picture (riders, their stops, waiting orders, the hexagon index) in memory, so a decision never waits on a database read.
 - **MongoDB is the source of truth.** Every decision is saved before it is announced. After a crash the engine rebuilds its memory from the database and carries on.
-- **The engine and the bots are separate.** The bots stand in for rider and restaurant apps and may only call the engine's public commands. A test enforces this wall, so the bots can be swapped for real apps without touching the engine.
+- **The engine and the bots are separate modules in the same process.** The bots stand in for rider and restaurant apps and may only call the engine's public commands. A test enforces this wall, so the bots can be swapped for real apps without touching the engine.
 - **Only one instance dispatches.** During a deploy two instances can be running; a lease stored in MongoDB lets only the holder make decisions. The other one serves the API and takes over within about 15 s if the leader dies.
 
 ---
@@ -99,7 +99,7 @@ flowchart TB
   WAKE --> FIND["Riders in nearby H3 hexagons"]
   FIND --> GATE["Keep riders that are online, have a free slot,<br/>are within range and have not rejected it"]
   GATE --> CLUB{"Rider busy?"}
-  CLUB -->|"yes"| FIT["Clubbing check:<br/>restaurant near their path, drop near theirs,<br/>same direction, deadlines still met"]
+  CLUB -->|"yes"| FIT["Clubbing check:<br/>restaurant near their path, drop near theirs,<br/>same direction, orders on board stay on time"]
   CLUB -->|"no"| SCORE
   FIT --> SCORE["Score the nearest 50:<br/>71% extra trip time + 29% recent load"]
   SCORE --> HOLD{"Time to leave yet?"}
@@ -109,7 +109,7 @@ flowchart TB
   OFFER -->|"rejected / ignored"| WAKE
   FIND -->|"nobody found"| RETRY["Retry after 1, 2, 4, then every 10 s,<br/>widen 5 → 7 → 10 km"]
   RETRY --> WAKE
-  RETRY -->|"180 s after the food is ready"| CANCEL["Cancelled: no rider"]
+  RETRY -->|"5 min after the food is ready"| CANCEL["Cancelled: no rider"]
 ```
 
 ---
@@ -124,14 +124,15 @@ flowchart TB
 | **Just-in-time hold and wake-up list** | An order waiting for its food is not re-scored every second. It sleeps until a rider could need to leave, so a typical order is scored only a couple of times. | `engine/wakeList.js` |
 | **Offers** | One open offer per rider, 30 s to answer. A rejecting rider is never offered that order again. Three ignored offers in a row switch a rider offline. A rider may cancel before pickup, and the order goes back to dispatch. | `engine/offers.js`, `engine/riderLifecycle.js` |
 | **Search widening** | If nobody is found or nobody accepts, the search grows from 5 to 7 to 10 km, at 60 s and 120 s after the first real try. Waiting for food doesn't count. 10 km is the hard ceiling. | `config/constants.js`, `engine/dispatch.js` |
-| **Promised time** | Every order gets a deadline when created: 5 min nominal first mile + prep + last mile + 10 min slack. Routes that would break any deadline are rejected. | `utils/orderTiming.js` |
+| **Promised time** | Every order gets a deadline when created: 5 min nominal first mile + prep + last mile + 10 min slack. A new order is never refused a rider for running late (late beats cancelled; the least-late rider wins), but a second order can't be fitted in any way that makes an order already on board miss its promise. | `utils/orderTiming.js`, `services/allocationEngine.js` |
+| **Cancel timer** | An order still unassigned **5 min after its food is ready** is cancelled (`no_rider`), so cooking time never counts against it (a 20-min order gets until minute 25) and a kitchen delay moves the window with it. An order a rider gives back gets a fresh 5 min. Adjustable live. | `engine/dispatch.js` |
 | **Storage** | The only module that talks to the database. Each assignment is one conditional update that succeeds only while the order is still waiting, so two decisions can never both win. | `engine/storage.js` |
 | **Leader lease** | A 15 s lease in MongoDB, renewed every 5 s; only the holder dispatches. | `engine/leaderLease.js` |
 | **Recovery** | On start, or after the presenter's crash button, the engine rebuilds riders, stops, open offers and waiting orders from the database. | `engine/hydrate.js` |
 | **Live stream** | Server-Sent Events: a full snapshot on connect, then every rider once a second plus each order event. A reconnecting browser gets a fresh snapshot. | `routes/stream.js`, `engine/broadcast.js` |
 | **Order intake** | For an upstream order service: its own `X-Service-Key`, and a unique `externalOrderId`, so a retried request returns the same order instead of a duplicate. | `routes/intake.js` |
 | **Routing** | Mapbox road routes for drawing and moving riders on the map, cached, with a daily call budget (3,000 by default) and a straight-line fallback. Scoring uses straight-line time at 40 km/h. | `services/routingService.js` |
-| **Simulation** | Rider bots move along routes and answer offers (2–8 s; by default 15% reject, 5% ignore, 2% cancel before pickup). Kitchen bots set prep times of 5–15 min, sometimes late or early. A customer bot places an order every 10 min. All rates can be changed live. | `sim/` |
+| **Simulation** | Rider bots move along routes and answer offers (2–8 s; by default 15% reject, 5% ignore, 2% cancel before pickup). Kitchen bots set prep times of 30–60 s (kept short so a demo moves quickly), sometimes late or early. A customer bot places an order every 10 min. All rates can be changed live. | `sim/` |
 | **Health and logs** | `GET /api/health` reports event-loop delay, dispatch round time, queue sizes, time to assign, database latency and Mapbox usage. Logs are JSON lines tagged with order and rider IDs. | `engine/health.js`, `utils/logger.js` |
 
 **The frontend** (React, Material UI, Mapbox GL) only presents what the backend decides: a live rider map, order and rider tables, an allocation history with score breakdowns, settings for weights and bot behaviour, and a presenter panel that forces edge cases (a rider rejects, the kitchen is late, a 60 s database outage, an engine crash).
@@ -148,7 +149,8 @@ flowchart TB
 | One order makes the engine throw | That order is cancelled with reason `engine_error`; everyone else keeps being dispatched |
 | Two decisions race for one order | The conditional save lets exactly one win |
 | A retried intake request | Returns the existing order (the external ID is unique) |
-| Nobody accepts an order | Re-offers, a widening search, then cancelled with reason `no_rider` 180 s after the food is ready |
+| Nobody accepts an order | Re-offers, a widening search, then cancelled with reason `no_rider` 5 min after its food is ready |
+| An order can no longer make its promise | It is still assigned, to the least-late rider |
 | Too many waiting orders | New orders are refused with "try again shortly" once 5,000 are waiting |
 | Mapbox is down or over budget | Straight-line routes |
 
@@ -203,7 +205,7 @@ Scoring is capped at the 50 nearest riders, so the part that grows is scanning e
 | 2,000 riders, 4,000 orders at once | 3,605 within 31 s, peak about 260 per second | p50 14 s, p90 23 s | 1.27 s | ≤ 21 ms | 0 |
 
 - The waiting time includes up to 5 s for the engine to pick up orders written straight into the database, plus the bot's 2–8 s to answer. The engine itself was not the slow part.
-- The orders left over (106 and 242) found no rider with a free, compatible slot within 10 km while the fleet was busy, and were cancelled at the 180 s limit. That is fleet size, not engine speed.
+- The orders left over (106 and 242) found no rider with a free, compatible slot within 10 km while the fleet was busy, and were cancelled at what was then a 180 s limit. That is fleet size, not engine speed.
 
 **What this means:** a tier-2 city's peak (the target for this version) is well inside what one process handles. The slowest round, 1.27 s, was the first one in the big burst: it offered about 1,500 orders, **one database write after another** (about 0.8 ms each on a local database).
 
@@ -291,7 +293,7 @@ Backend `.env`:
 
 The engine and bots start with the server; there is no start/stop switch.
 
-**Tests:** `cd backend && npm test` runs 45 unit tests (scoring, clubbing, deadlines, wake-up list, search widening and its 10 km cap, configuration, and the engine/bot wall). A GitHub Action runs them on every push and pull request.
+**Tests:** `cd backend && npm test` runs 46 unit tests (scoring, clubbing, deadlines, wake-up list, search widening and its 10 km cap, configuration, and the engine/bot wall). A GitHub Action runs them on every push and pull request.
 
 ---
 
